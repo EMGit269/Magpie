@@ -1,0 +1,290 @@
+{
+  "version": "2026-07-02",
+  "repo_state": {
+    "standalone_magpie_present": false,
+    "authoritative_plugin_project": "ADDGH",
+    "external_agent_project": "agent_service"
+  },
+  "sources": {
+    "addgh_function_tools": "ADDGH/ChatWindow.ToolDefinitions.cs",
+    "tool_registry": "ADDGH/Agent/ToolRegistry.cs",
+    "host_bridge": "ADDGH/ChatWindow.HostBridge.cs",
+    "host_bridge_validation": "ADDGH/HostBridge/HostBridgeValidation.cs",
+    "agent_service_local_tools": "agent_service/app/tools.py"
+  },
+  "addgh_function_tools": [
+    {
+      "name": "create_ai_image",
+      "group": "image",
+      "args": ["prompt", "intent", "use_uploaded_images", "aspect_ratio", "summary", "summary_detail"]
+    },
+    {
+      "name": "ensure_gh_canvas",
+      "group": "canvas",
+      "args": ["summary", "summary_detail"]
+    },
+    {
+      "name": "create_csharp_script_component",
+      "group": "csharp",
+      "args": ["alias_id", "name", "label", "x", "y", "inputs", "outputs", "body", "components", "connections", "group_name", "summary", "summary_detail"]
+    },
+    {
+      "name": "edit_csharp_script_component",
+      "group": "csharp",
+      "args": ["id", "mode", "body", "summary", "summary_detail"]
+    },
+    {
+      "name": "create_script_component_graph",
+      "group": "csharp_legacy",
+      "args": ["mode", "scripts", "components", "connections", "group_name", "summary", "summary_detail"]
+    },
+    {
+      "name": "get_gh_components",
+      "group": "canvas",
+      "args": ["summary", "summary_detail"]
+    },
+    {
+      "name": "add_gh_component",
+      "group": "canvas_mutation",
+      "args": ["name", "component_guid", "x", "y", "label", "graph_mapper_type", "value", "min", "max", "decimals", "summary", "summary_detail"]
+    },
+    {
+      "name": "connect_gh_components",
+      "group": "canvas_mutation",
+      "args": ["from_id", "from_index", "from_port_label", "to_id", "to_index", "to_port_label", "summary", "summary_detail"]
+    },
+    {
+      "name": "remove_gh_component",
+      "group": "canvas_mutation",
+      "args": ["id", "summary", "summary_detail"]
+    },
+    {
+      "name": "set_gh_component_value",
+      "group": "canvas_mutation",
+      "args": ["id", "value", "property", "graph_mapper_type", "min", "max", "decimals", "summary", "summary_detail"]
+    },
+    {
+      "name": "remove_gh_connection",
+      "group": "canvas_mutation",
+      "args": ["from_id", "from_index", "to_id", "to_index", "summary", "summary_detail"]
+    },
+    {
+      "name": "create_component_graph",
+      "group": "canvas_mutation",
+      "args": ["components", "connections", "group_name", "auto_group", "summary", "summary_detail"]
+    },
+    {
+      "name": "recompute_gh_canvas",
+      "group": "canvas_mutation",
+      "args": ["summary", "summary_detail"]
+    },
+    {
+      "name": "gh_native_script_editor",
+      "group": "csharp_legacy",
+      "args": ["id", "mode", "code", "language", "summary", "summary_detail"]
+    },
+    {
+      "name": "check_gh_errors",
+      "group": "canvas",
+      "args": ["summary", "summary_detail"]
+    },
+    {
+      "name": "set_gh_component_status",
+      "group": "canvas_mutation",
+      "args": ["id", "preview", "enabled", "summary", "summary_detail"]
+    },
+    {
+      "name": "set_all_csharp_script_previews",
+      "group": "csharp",
+      "args": ["preview", "summary", "summary_detail"]
+    },
+    {
+      "name": "modify_gh_component_ports",
+      "group": "canvas_mutation",
+      "args": ["id", "is_input", "action", "port_name", "type_hint", "index", "summary", "summary_detail"]
+    },
+    {
+      "name": "manage_gh_groups",
+      "group": "canvas_mutation",
+      "args": ["action", "ids", "group_id", "name", "summary", "summary_detail"]
+    },
+    {
+      "name": "modify_gh_port_data",
+      "group": "canvas_mutation",
+      "args": ["id", "is_input", "index", "operation", "summary", "summary_detail"]
+    },
+    {
+      "name": "search_component_library",
+      "group": "lookup",
+      "args": ["keyword", "summary", "summary_detail"]
+    },
+    {
+      "name": "search_gh_component_catalog",
+      "group": "lookup",
+      "args": ["query", "max_results", "category_contains", "summary", "summary_detail"]
+    },
+    {
+      "name": "web_research",
+      "group": "docs_lookup",
+      "args": ["mode", "query", "url", "allowed_domains", "max_results", "max_chars", "summary", "summary_detail"]
+    },
+    {
+      "name": "query_gh_components",
+      "group": "canvas_lookup",
+      "args": ["id", "name_contains", "has_errors", "is_script", "has_connections", "port_name_contains", "max_results", "neighbor_depth", "summary", "summary_detail"]
+    },
+    {
+      "name": "get_component_context",
+      "group": "canvas_lookup",
+      "args": ["id", "depth", "include_script_bodies", "summary", "summary_detail"]
+    },
+    {
+      "name": "read_component_script",
+      "group": "canvas_lookup",
+      "args": ["id", "summary", "summary_detail"]
+    },
+    {
+      "name": "create_gh_skill",
+      "group": "skills",
+      "args": ["file_name", "name", "description", "content", "summary", "summary_detail"]
+    },
+    {
+      "name": "read_skill_file",
+      "group": "skills",
+      "args": ["file_name", "summary", "summary_detail"]
+    },
+    {
+      "name": "read_reference_json",
+      "group": "references",
+      "args": ["file_name", "summary", "summary_detail"]
+    },
+    {
+      "name": "import_reference_gh",
+      "group": "references",
+      "args": ["file_name", "offset_x", "offset_y", "group_name", "summary", "summary_detail"]
+    },
+    {
+      "name": "show_reference_options",
+      "group": "ui_tool",
+      "args": ["options"]
+    },
+    {
+      "name": "show_plan_steps",
+      "group": "ui_tool",
+      "args": ["schema_version", "plan_title", "execute_prompt", "execute_label", "steps"]
+    }
+  ],
+  "host_bridge_tools": [
+    {
+      "name": "get_canvas_summary",
+      "read_only": true,
+      "formal_v1": true,
+      "maps_to": "get_gh_components",
+      "args": []
+    },
+    {
+      "name": "query_components",
+      "read_only": true,
+      "formal_v1": true,
+      "maps_to": "query_gh_components",
+      "args": ["id", "name_contains", "has_errors", "is_script", "has_connections", "port_name_contains", "max_results", "neighbor_depth"]
+    },
+    {
+      "name": "get_component_context",
+      "read_only": true,
+      "formal_v1": true,
+      "maps_to": "get_component_context",
+      "args": ["id", "depth", "include_script_bodies"]
+    },
+    {
+      "name": "read_component_script",
+      "read_only": true,
+      "formal_v1": false,
+      "maps_to": "read_component_script",
+      "args": ["id"]
+    },
+    {
+      "name": "check_gh_errors",
+      "read_only": true,
+      "formal_v1": true,
+      "maps_to": "check_gh_errors",
+      "args": []
+    },
+    {
+      "name": "recompute_canvas",
+      "read_only": false,
+      "formal_v1": false,
+      "maps_to": "recompute_gh_canvas",
+      "args": []
+    },
+    {
+      "name": "connect_components",
+      "read_only": false,
+      "formal_v1": false,
+      "maps_to": "connect_gh_components",
+      "args": ["from_id", "from_index", "to_id", "to_index", "from_port_label", "to_port_label"]
+    },
+    {
+      "name": "remove_component",
+      "read_only": false,
+      "formal_v1": false,
+      "maps_to": "remove_gh_component",
+      "args": ["id"]
+    },
+    {
+      "name": "set_component_value",
+      "read_only": false,
+      "formal_v1": false,
+      "maps_to": "set_gh_component_value",
+      "args": ["id", "value", "min", "max", "decimals", "property", "graph_mapper_type"]
+    },
+    {
+      "name": "create_component_graph",
+      "read_only": false,
+      "formal_v1": true,
+      "maps_to": "create_component_graph",
+      "args": ["components", "connections", "group_name"]
+    },
+    {
+      "name": "create_csharp_script",
+      "read_only": false,
+      "formal_v1": false,
+      "maps_to": "create_csharp_script_component",
+      "args": ["alias_id", "name", "label", "x", "y", "inputs", "outputs", "body", "components", "connections", "group_name"]
+    },
+    {
+      "name": "edit_csharp_script",
+      "read_only": false,
+      "formal_v1": false,
+      "maps_to": "edit_csharp_script_component",
+      "args": ["id", "mode", "body"]
+    }
+  ],
+  "agent_service_local_tools": [
+    {
+      "name": "list_tasks",
+      "read_only": true,
+      "args": []
+    },
+    {
+      "name": "add_task",
+      "read_only": false,
+      "args": ["title", "description"]
+    },
+    {
+      "name": "update_task",
+      "read_only": false,
+      "args": ["task_id", "status", "notes", "title", "description"]
+    },
+    {
+      "name": "get_session_context",
+      "read_only": true,
+      "args": []
+    },
+    {
+      "name": "set_session_fact",
+      "read_only": false,
+      "args": ["key", "value"]
+    }
+  ]
+}

@@ -362,12 +362,12 @@ namespace Magpie
                         _ = OptimizeCanvasPromptNodeAsync(payload);
                         break;
                     case "host_bridge_manifest_request":
-                        PostCanvasMessage("host_bridge_manifest", BuildHostBridgeManifestPayload());
+                        PostCanvasMessage("host_bridge_manifest", GrasshopperHost.BuildHostBridgeManifest());
                         break;
                     case "host_bridge_invoke":
                         {
                             JObject request = payload?["request"] as JObject ?? payload ?? new JObject();
-                            PostCanvasMessage("host_bridge_result", ExecuteHostBridgeRequest(request));
+                            PostCanvasMessage("host_bridge_result", GrasshopperHost.ExecuteHostBridgeRequest(request));
                         }
                         break;
                     case "canvas_switch_to_code":
@@ -798,7 +798,7 @@ namespace Magpie
             asPlainComment = false;
             if (!jsonMode)
             {
-                string raw = ExecuteGetGhComponents();
+                string raw = Magpie.Host.GrasshopperDocumentHost.ExecuteGetCanvasSummary();
                 try
                 {
                     var obj = JsonConvert.DeserializeObject(raw);

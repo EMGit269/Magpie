@@ -1,0 +1,29 @@
+{
+  "session_id": "test",
+  "user_goal": "",
+  "facts": {},
+  "host_capabilities": [],
+  "recent_messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello! I'm Magpie, your assistant for Grasshopper. How can I help you today? Whether it's about generative design, scripting, or general workflows, I'm here to assist!"
+    },
+    {
+      "role": "user",
+      "content": "check canvas"
+    },
+    {
+      "role": "user",
+      "content": "hello"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello! How can I help you today?"
+    }
+  ],
+  "updated_at": "2026-07-03T07:58:54.447903Z"
+}

@@ -634,7 +634,7 @@ namespace Magpie
         {
             try
             {
-                string raw = ExecuteGetGhComponents();
+                string raw = Magpie.Host.GrasshopperDocumentHost.ExecuteGetCanvasSummary();
                 if (string.IsNullOrWhiteSpace(raw) || raw.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
                     return "当前无可用 Grasshopper 画布上下文。";
 

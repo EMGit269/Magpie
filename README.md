@@ -3,7 +3,7 @@
 `Magpie` 是从原 `ADDGH` 项目中拆出的独立 Grasshopper 插件分支，目标是把原来内嵌在 Rhino / Grasshopper 插件里的 AI 能力，迁移成：
 
 - `Magpie.gha` 作为 Grasshopper 宿主插件
-- 外部 `agent_service` 作为 LangChain / LangGraph / OpenAI-compatible runtime
+- 外部 `agent_service` 默认按 LangGraph / OpenAI-compatible runtime 接入，旧 LangChain endpoint 保留兼容回退
 - 本地 `host bridge` 作为 Grasshopper 能力暴露层
 
 这份文档是给下一个 AI 或开发者的迁移说明。重点不是介绍历史，而是说明：
@@ -22,7 +22,7 @@
 - 目录内自带 [NuGet.config](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\NuGet.config) 和 `nuget-offline/`
 - 可以在本地单独执行 `dotnet build .\Magpie.csproj`
 - 构建结果是 `Magpie.gha`
-- Grasshopper 菜单入口已经独立为 `Magpie -> Open Agent`
+- Grasshopper 菜单入口已经独立为直接点击 `Magpie`
 
 目前它本质上仍然是：
 
@@ -45,23 +45,23 @@
 2. 插件内 UI / 宿主执行层
 
 - 主 UI 和大量 Grasshopper 操作逻辑仍集中在 `ChatWindow*.cs`
-- LangChain 外部窗口入口在 [LangChain/MagpieWindow.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\LangChain\MagpieWindow.cs)
+- Agent Runtime 外部窗口入口在 [AgentRuntime/MagpieWindow.cs](C:\Users\26933\Desktop\Magpie\AgentRuntime\MagpieWindow.cs)
 - 外部服务客户端在：
-  - [LangChain/MagpieSettings.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\LangChain\MagpieSettings.cs)
-  - [LangChain/MagpieServiceClient.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\LangChain\MagpieServiceClient.cs)
+  - [AgentRuntime/MagpieSettings.cs](C:\Users\26933\Desktop\Magpie\AgentRuntime\MagpieSettings.cs)
+  - [AgentRuntime/MagpieServiceClient.cs](C:\Users\26933\Desktop\Magpie\AgentRuntime\MagpieServiceClient.cs)
 
 3. Host bridge / tool 暴露层
 
-- 本地 bridge HTTP server 在：
-  - [ChatWindow.HostBridge.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\ChatWindow.HostBridge.cs)
-  - [ChatWindow.HostBridgeServer.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\ChatWindow.HostBridgeServer.cs)
+- 本地 bridge 生命周期与 facade：
+  - [GrasshopperHost.cs](C:\Users\26933\Desktop\Magpie\GrasshopperHost.cs)
+  - [Host/MagpieHostBridgeBackend.cs](C:\Users\26933\Desktop\Magpie\Host\MagpieHostBridgeBackend.cs)
 - 参数验证与 tool spec 在：
   - [HostBridge/HostBridgeModels.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\HostBridge\HostBridgeModels.cs)
   - [HostBridge/HostBridgeValidation.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\HostBridge\HostBridgeValidation.cs)
 
-## 3. LangChain 相关现状
+## 3. Agent Runtime 相关现状
 
-当前 `Magpie` 已经能作为外部 agent UI 的插件壳使用，但离“正式 LangChain 架构”还有差距。
+当前 `Magpie` 已经能作为外部 agent UI 的插件壳使用。插件侧默认按 LangGraph runtime 调用外部服务，但仍保留旧 LangChain endpoint 的兼容回退。
 
 已经具备：
 
@@ -71,12 +71,31 @@
 - 一批已经 formalize 的 Grasshopper tools
 - `DeepSeek / OpenAI-compatible` 这类服务端方向已经在外部 `agent_service` 里走通
 
+当前 runtime 调用规则：
+
+- 默认 `MAGPIE_AGENT_RUNTIME=langgraph`
+- 默认优先调用 `/graph/invoke`，再尝试 `/langgraph/invoke`；`agent_service` 已暴露这两个端点作为 `/agent/invoke` 的别名
+- 如果服务端未实现上述路径，插件会对 404 / 405 回退到旧 `/agent/invoke` 或 `/workflow/run`
+- 如果你的服务端 LangGraph 路径不同，可设置 `MAGPIE_AGENT_INVOKE_PATH=/your/path`
+- 如果需要临时回旧模式，可设置 `MAGPIE_AGENT_RUNTIME=langchain`
+- 如果希望打开 Magpie 时自动启动服务，可设置 `MAGPIE_AGENT_SERVICE_COMMAND`
+- 如果启动命令需要指定目录，可设置 `MAGPIE_AGENT_SERVICE_WORKDIR`
+- 也可以直接在 Magpie 设置面板里填写 `Runtime URL`、`Start Command`、`Working Directory`、`Invoke Path` 并保存；插件会优先读取这些设置
+
+示例：
+
+```powershell
+setx MAGPIE_AGENT_SERVICE_URL "http://127.0.0.1:8000"
+setx MAGPIE_AGENT_SERVICE_WORKDIR "C:\path\to\agent_service"
+setx MAGPIE_AGENT_SERVICE_COMMAND "python -m uvicorn app:app --host 127.0.0.1 --port 8000"
+```
+
 尚未完成：
 
 - `Magpie` 内部命名空间仍大量使用 `ADDGH`
 - `host bridge` 仍挂在 `ChatWindow` partial class 上，不是独立宿主服务类
 - 工具执行逻辑仍然和旧 UI / 旧插件代码强耦合
-- LangChain 规划与工具调用策略主要还在外部 `agent_service`，插件侧尚未收敛成更稳定 contract
+- LangGraph / agent 编排策略主要还在外部 `agent_service`，插件侧尚未收敛成更稳定 contract
 - `Magpie` 还不是“只保留宿主职责”的最简插件
 
 ## 4. 已完成的独立化工作
@@ -89,8 +108,8 @@
 - 独立 `NuGet.config`
 - 复制离线包到 `Magpie/nuget-offline/`
 - 插件 AssemblyName 改为 `Magpie`
-- 菜单入口改为 `Magpie -> Open Agent`
-- LangChain 分支窗口品牌改为 `Magpie`
+- 菜单入口改为直接点击 `Magpie`
+- Agent Runtime 窗口品牌改为 `Magpie`
 - 若 Rhino 锁定默认输出目录，可用 `OutDir` 单独编译
 - 第一批运行前缀已切到 `MAGPIE_*`
 
@@ -124,35 +143,24 @@
 - 外部交付时不专业
 - 后续拆 DLL 或子项目时命名冲突概率高
 
-### 5.2 Host bridge 仍耦合在 ChatWindow
+### 5.2 Host bridge 已从 ChatWindow 解耦（已完成）
 
-当前 `host bridge` 不是独立服务类，而是 `ChatWindow` 的 partial 结构。
+`GrasshopperHost` 现在持有 bridge 生命周期，`MagpieHostBridgeBackend` 已把所有 bridge tools 委托给 `GrasshopperDocumentHost`。`ChatWindow` 不再直接执行任何 bridge tool。
 
-问题：
+### 5.3 Tool 执行已迁移到宿主层（first-wave 及主要工具已完成）
 
-- bridge 生命周期依赖 UI 静态类
-- tool 执行入口难以复用
-- 不利于把 `Magpie` 收敛成“宿主 + tool executor”
-- 如果后续引入更轻的窗口或 WebView UI，会继续被旧 `ChatWindow` 绑定
+`ExecuteGetGhComponents`、`ExecuteCreateComponentGraph`、`ExecuteCheckGhErrors` 等执行逻辑已迁移到：
 
-### 5.3 Tool 执行仍然强依赖旧大类
+- [Host/GrasshopperDocumentHost.Tools.cs](C:\Users\26933\Desktop\Magpie\Host\GrasshopperDocumentHost.Tools.cs)
 
-`ExecuteGetGhComponents`、`ExecuteCreateComponentGraph`、`ExecuteCheckGhErrors` 等执行逻辑主要还在：
-
-- [ChatWindow.GhTools.Execution.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\ChatWindow.GhTools.Execution.cs)
-
-问题：
-
-- 文件巨大
-- 与 UI 状态、缓存、辅助方法耦合
-- 不利于后续抽出正式 `ToolExecutor` / `GrasshopperHostService`
+`ChatWindow.GhTools.Execution.cs` 中对应重复实现已删除，仅保留 Code Surface / 视觉复核等非 bridge 工具的辅助方法。
 
 ### 5.4 README 之外的正式迁移文档还不够
 
 如果未来这个目录完全搬走，接手者仍需要快速知道：
 
 - 哪些文件是“先别动”的
-- 哪些文件是 LangChain migration 核心
+- 哪些文件是 Agent Runtime migration 核心
 - 哪些部分只是历史遗留，不是当前优先级
 
 ## 6. 建议的后续迁移顺序
@@ -169,7 +177,7 @@
    - `Magpie`
    - `Magpie.Agent`
    - `Magpie.HostBridge`
-   - `Magpie.LangChain`
+   - `Magpie.AgentRuntime`
 2. 把 `using ADDGH.*` 改成 `using Magpie.*`
 3. 评估是否把 [ADDGHInfo.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\ADDGHInfo.cs) 改名为 `MagpieInfo.cs`
 4. 清理注释和用户可见文本中的 `ADDGH`
@@ -177,34 +185,22 @@
 
 阶段 A 的收益最大，而且对功能影响最小。
 
-### 阶段 B：Bridge 与执行层解耦
+### 阶段 B：Bridge 与执行层解耦（已完成）
 
 目标：让 `host bridge` 不再依附 `ChatWindow`
 
-建议操作：
+当前状态：
 
-1. 新建独立宿主层，例如：
-   - `Magpie.Host/GrasshopperHostBridgeServer.cs`
-   - `Magpie.Host/GrasshopperToolExecutor.cs`
-   - `Magpie.Host/GrasshopperDocumentQueryService.cs`
-2. 把下面两类逻辑拆出来：
-   - HTTP server / manifest / invoke contract
-   - Grasshopper tool execution
-3. `ChatWindow` 和 `MagpieWindow` 都只调用宿主层，不直接持有 bridge 逻辑
+- `GrasshopperHost` 持有 bridge 生命周期
+- `MagpieHostBridgeBackend` 把所有 tools 委托给 `GrasshopperDocumentHost`
+- `ChatWindow` 的 UI 调用者也改走 `GrasshopperDocumentHost`
+- `ChatWindow.GhTools.Execution.cs` 中对应重复实现已删除
 
-建议先拆这几个工具：
+后续如需继续收敛，可进一步把 `HostBridge/GrasshopperHostToolExecutor.cs` 里的 tool dispatch 也合并进宿主层，并把 `ChatWindow.GhTools.Execution.cs` 里剩余的非 bridge helper 继续瘦身。
 
-- `get_canvas_summary`
-- `query_components`
-- `get_component_context`
-- `check_gh_errors`
-- `create_component_graph`
+### 阶段 C：正式 LangGraph 适配
 
-因为这批已经是 first-wave formal tools。
-
-### 阶段 C：正式 LangChain 适配
-
-目标：让 `Magpie` 真正成为“LangChain runtime 的 Grasshopper 宿主”
+目标：让 `Magpie` 真正成为“LangGraph runtime 的 Grasshopper 宿主”
 
 建议操作：
 
@@ -217,12 +213,12 @@
    - 哪些是 read-only
    - 哪些是 mutation
    - 哪些需要用户确认
-4. 若未来改 LangGraph，也不要改插件协议，尽量只改 `agent_service`
+4. 后续继续保持插件协议稳定，尽量只在 `agent_service` 内调整 graph 编排
 
 关键原则：
 
 - 插件侧负责“宿主能力暴露”
-- `agent_service` 负责“LangChain / planner / memory / tool orchestration”
+- `agent_service` 负责“LangGraph / planner / memory / tool orchestration”
 - 不要把 agent 编排逻辑重新塞回 `.gha`
 
 ### 阶段 D：UI 收敛
@@ -265,16 +261,16 @@
 - [MenuIntegration.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\MenuIntegration.cs)
 - [ADDGHInfo.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\ADDGHInfo.cs)
 
-2. LangChain 外部窗口
+2. Agent Runtime 外部窗口
 
-- [LangChain/MagpieWindow.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\LangChain\MagpieWindow.cs)
-- [LangChain/MagpieServiceClient.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\LangChain\MagpieServiceClient.cs)
-- [LangChain/MagpieSettings.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\LangChain\MagpieSettings.cs)
+- [AgentRuntime/MagpieWindow.cs](C:\Users\26933\Desktop\Magpie\AgentRuntime\MagpieWindow.cs)
+- [AgentRuntime/MagpieServiceClient.cs](C:\Users\26933\Desktop\Magpie\AgentRuntime\MagpieServiceClient.cs)
+- [AgentRuntime/MagpieSettings.cs](C:\Users\26933\Desktop\Magpie\AgentRuntime\MagpieSettings.cs)
 
 3. Host bridge
 
-- [ChatWindow.HostBridge.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\ChatWindow.HostBridge.cs)
-- [ChatWindow.HostBridgeServer.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\ChatWindow.HostBridgeServer.cs)
+- [GrasshopperHost.cs](C:\Users\26933\Desktop\Magpie\GrasshopperHost.cs)
+- [Host/MagpieHostBridgeBackend.cs](C:\Users\26933\Desktop\Magpie\Host\MagpieHostBridgeBackend.cs)
 - [HostBridge/HostBridgeModels.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\HostBridge\HostBridgeModels.cs)
 - [HostBridge/HostBridgeValidation.cs](C:\Users\26933\.codex\worktrees\fdf4\DEMOagent\Magpie\HostBridge\HostBridgeValidation.cs)
 
@@ -322,7 +318,7 @@
 
 - 完整 namespace 重命名
 - 完整 host bridge 解耦
-- 完整 LangChain tool/runtime 正式化
+- 完整 LangGraph tool/runtime 正式化
 - 完整发布包拆分
 
 ## 11. 给下一个 AI 的简短指令
@@ -331,9 +327,9 @@
 
 1. 只在 `Magpie/` 内工作，不要再改 `ADDGH/`
 2. 把 `Magpie` 当成独立产品，而不是原项目子模块
-3. 优先做“内部独立化”，再做“LangChain 正式适配”
+3. 优先做“内部独立化”，再做“LangGraph 正式适配”
 4. 迁移时每一批都重新 `dotnet build Magpie\Magpie.csproj`
 
 最重要的一句话：
 
-`Magpie` 现在已经不是“能不能独立编译”的问题，而是“如何把复制出来的旧宿主代码，逐步收敛成一个正式的 LangChain 外部宿主插件”。  
+`Magpie` 现在已经不是“能不能独立编译”的问题，而是“如何把复制出来的旧宿主代码，逐步收敛成一个正式的 LangGraph 外部宿主插件”。  

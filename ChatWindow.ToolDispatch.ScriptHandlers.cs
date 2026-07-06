@@ -21,7 +21,7 @@ namespace Magpie
             {
                 string csharpName = argsObj["name"]?.ToString();
                 if (string.IsNullOrWhiteSpace(csharpName)) csharpName = argsObj["label"]?.ToString();
-                result.ToolResult = ExecuteCreateCSharpScriptComponent(
+                result.ToolResult = GrasshopperHost.CanvasMutationService.CreateCSharpScript(
                     argsObj["alias_id"]?.ToString(),
                     csharpName,
                     argsObj["x"]?.ToObject<float>() ?? 0f,
@@ -49,7 +49,7 @@ namespace Magpie
                 if (settingBody)
                     beforeBody = ReadCSharpScriptBodyForStats(resolvedId);
 
-                result.ToolResult = ExecuteEditCSharpScriptComponent(
+                result.ToolResult = GrasshopperHost.CanvasMutationService.EditCSharpScript(
                     resolvedId,
                     argsObj["mode"]?.ToString(),
                     argsObj["body"]?.ToString());
@@ -90,7 +90,7 @@ namespace Magpie
 
             if (funcName == "read_component_script")
             {
-                result.ToolResult = ExecuteReadComponentScript(ResolveToolObjectId(argsObj["id"]?.ToString()));
+                result.ToolResult = GrasshopperHost.DocumentQueryService.ReadComponentScript(argsObj["id"]?.ToString());
                 return true;
             }
 

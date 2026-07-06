@@ -37,8 +37,24 @@
     <None Remove="obj_verify\**\*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="AgentRuntime\Web\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <Target Name="CopyGhaAsDllForConsumers" AfterTargets="Build">
     <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(TargetDir)$(AssemblyName).dll" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyAgentRuntimeWebAssets" AfterTargets="Build">
+    <ItemGroup>
+      <AgentRuntimeWebFiles Include="AgentRuntime\Web\**\*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(AgentRuntimeWebFiles)"
+      DestinationFiles="@(AgentRuntimeWebFiles->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="false" />
   </Target>
 
 </Project>

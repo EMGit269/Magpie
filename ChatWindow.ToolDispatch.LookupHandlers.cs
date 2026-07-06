@@ -20,7 +20,7 @@ namespace Magpie
             }
             if (funcName == "query_gh_components")
             {
-                result.ToolResult = ExecuteQueryGhComponents(
+                result.ToolResult = GrasshopperHost.DocumentQueryService.QueryComponents(
                     ResolveToolObjectId(argsObj["id"]?.ToString()),
                     argsObj["name_contains"]?.ToString(),
                     ReadNullableBool(argsObj, "has_errors"),
@@ -33,8 +33,8 @@ namespace Magpie
             }
             if (funcName == "get_component_context")
             {
-                result.ToolResult = ExecuteGetComponentContext(
-                    ResolveToolObjectId(argsObj["id"]?.ToString()),
+                result.ToolResult = GrasshopperHost.DocumentQueryService.GetComponentContext(
+                    argsObj["id"]?.ToString(),
                     argsObj["depth"]?.ToObject<int?>() ?? 1,
                     ReadNullableBool(argsObj, "include_script_bodies") ?? false);
                 return true;

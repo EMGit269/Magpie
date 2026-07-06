@@ -14,7 +14,7 @@ namespace Magpie.HostBridge
         string ExecuteConnectComponents(string fromId, int fromIndex, string toId, int toIndex, string fromPortLabel, string toPortLabel);
         string ExecuteRemoveComponent(string id);
         string ExecuteSetComponentValue(string id, string value, double? min, double? max, int? decimals, string property, string graphMapperType);
-        string ExecuteCreateComponentGraph(JArray components, JArray connections, string groupName);
+        string ExecuteCreateComponentGraph(JArray components, JArray connections, string groupName, string csharpFirstHelperReason = null, string csharpFirstHelperReasonDetail = null);
         string ExecuteCreateCSharpScript(string aliasId, string label, float x, float y, JArray inputs, JArray outputs, string body, JArray components, JArray connections, string groupName);
         string ExecuteEditCSharpScript(string id, string mode, string body);
     }

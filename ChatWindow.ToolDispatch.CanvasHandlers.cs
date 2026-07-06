@@ -16,12 +16,12 @@ namespace Magpie
             }
             if (funcName == "get_gh_components")
             {
-                result.ToolResult = ExecuteGetGhComponents();
+                result.ToolResult = GrasshopperHost.DocumentQueryService.GetCanvasSummary();
                 return true;
             }
             if (funcName == "recompute_gh_canvas")
             {
-                result.ToolResult = ExecuteRecomputeGhCanvas();
+                result.ToolResult = GrasshopperHost.CanvasMutationService.RecomputeCanvas();
                 return true;
             }
             if (funcName == "capture_rhino_viewport")
@@ -31,7 +31,7 @@ namespace Magpie
             }
             if (funcName == "check_gh_errors")
             {
-                result.ToolResult = ExecuteCheckGhErrors();
+                result.ToolResult = GrasshopperHost.DocumentQueryService.CheckGhErrors();
                 return true;
             }
             return false;
@@ -76,10 +76,10 @@ namespace Magpie
 
             if (funcName == "connect_gh_components")
             {
-                result.ToolResult = ExecuteConnectGhComponents(
-                    ResolveToolObjectId(argsObj["from_id"]?.ToString()),
+                result.ToolResult = GrasshopperHost.CanvasMutationService.ConnectComponents(
+                    argsObj["from_id"]?.ToString(),
                     argsObj["from_index"]?.ToObject<int>() ?? 0,
-                    ResolveToolObjectId(argsObj["to_id"]?.ToString()),
+                    argsObj["to_id"]?.ToString(),
                     argsObj["to_index"]?.ToObject<int>() ?? 0,
                     argsObj["from_port_label"]?.ToString(),
                     argsObj["to_port_label"]?.ToString());
@@ -89,15 +89,15 @@ namespace Magpie
 
             if (funcName == "remove_gh_component")
             {
-                result.ToolResult = ExecuteRemoveGhComponent(ResolveToolObjectId(argsObj["id"]?.ToString()));
+                result.ToolResult = GrasshopperHost.CanvasMutationService.RemoveComponent(argsObj["id"]?.ToString());
                 if (!result.ToolResult.StartsWith("Error:", StringComparison.OrdinalIgnoreCase)) result.DelComp++;
                 return true;
             }
 
             if (funcName == "set_gh_component_value")
             {
-                result.ToolResult = ExecuteSetGhComponentValue(
-                    ResolveToolObjectId(argsObj["id"]?.ToString()),
+                result.ToolResult = GrasshopperHost.CanvasMutationService.SetComponentValue(
+                    argsObj["id"]?.ToString(),
                     argsObj["value"]?.ToString(),
                     ReadNullableDouble(argsObj, "min"),
                     ReadNullableDouble(argsObj, "max"),
@@ -130,7 +130,7 @@ namespace Magpie
                 string groupName = argsObj["group_name"]?.ToString();
                 if (string.IsNullOrEmpty(groupName))
                     groupName = autoGroup ? "AI Generated" : null;
-                result.ToolResult = ExecuteCreateComponentGraph(
+                result.ToolResult = GrasshopperHost.CanvasMutationService.CreateComponentGraph(
                     argsObj["components"] as JArray,
                     argsObj["connections"] as JArray,
                     groupName,

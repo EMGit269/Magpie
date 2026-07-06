@@ -75,8 +75,8 @@ namespace Magpie.HostBridge
                     throw new InvalidOperationException("Every component entry must be an object.");
 
                 EnsureRequiredString(component, "name", allowEmpty: true, allowMissing: true);
-                EnsureRequiredNumber(component, "x");
-                EnsureRequiredNumber(component, "y");
+                EnsureNumberType(component, "x");
+                EnsureNumberType(component, "y");
                 EnsureType(component, "component_guid", JTokenType.String);
                 EnsureType(component, "label", JTokenType.String);
                 EnsureType(component, "value", JTokenType.String);
@@ -131,6 +131,14 @@ namespace Magpie.HostBridge
             if (token == null) return;
             if (token.Type != expected)
                 throw new InvalidOperationException("Field '" + field + "' must be of type " + expected.ToString().ToLowerInvariant() + ".");
+        }
+
+        private static void EnsureNumberType(JObject obj, string field)
+        {
+            var token = obj?[field];
+            if (token == null) return;
+            if (token.Type != JTokenType.Integer && token.Type != JTokenType.Float)
+                throw new InvalidOperationException("Field '" + field + "' must be numeric.");
         }
 
         private static void EnsureIntegerRange(JObject obj, string field, int min, int max)

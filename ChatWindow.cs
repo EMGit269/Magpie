@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -522,6 +522,7 @@ namespace Magpie
         {
             if (_isGenerating) return;
             _layoutMode = mode;
+            Magpie.Host.GrasshopperDocumentHost.CurrentLayoutMode = (Magpie.Host.LayoutMode)(int)mode;
             SaveLayoutModeSetting();
             UpdateLayoutModeButtons();
             ReplaceCurrentSystemPrompt();
@@ -970,9 +971,6 @@ namespace Magpie
 
         private static List<object> _messages = new List<object>();
         private static List<object> _displayMessages = new List<object>();
-        private static string _cachedCanvasState = null;  // 画布状态缓存
-        private static string _cachedRhinoUnitSignature = null;
-        private static bool _canvasChanged = true;  // 画布是否改变标记
         private static Grasshopper.Kernel.GH_Document _publicIdBoundDocument = null;
         private static readonly Dictionary<Guid, string> _publicIdByGuid = new Dictionary<Guid, string>();
         private static readonly Dictionary<string, Guid> _guidByPublicId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -1097,7 +1095,7 @@ namespace Magpie
 
             TeardownGrasshopperCodeSurfaceHooks();
             DisposeCanvasWorkbench();
-            StopHostBridgeRuntimeForExternalClients();
+            GrasshopperHost.StopHostBridgeRuntime();
 
             _pendingAttachments.Clear();
             _thinkingBubble = null;
@@ -1764,7 +1762,7 @@ namespace Magpie
 
         public static void Show()
         {
-            EnsureHostBridgeRuntimeForExternalClients();
+            GrasshopperHost.EnsureHostBridgeRuntime();
             if (_window != null)
             {
                 ActivateMainWindow();
@@ -2618,6 +2616,7 @@ namespace Magpie
             _menuModeCSharp = (MenuItem)_window.FindName("MenuModeCSharp");
             _menuModeMixed = (MenuItem)_window.FindName("MenuModeMixed");
             _layoutMode = ReadLayoutModeSetting();
+            Magpie.Host.GrasshopperDocumentHost.CurrentLayoutMode = (Magpie.Host.LayoutMode)(int)_layoutMode;
             _agentMode = ReadAgentModeSetting();
             _displayMode = ReadDisplayModeSetting();
             _themeMode = ReadThemeModeSetting();
@@ -2972,8 +2971,6 @@ namespace Magpie
                 _messages.AddRange(BuildInitialSystemMessages());
                 _displayMessages?.Clear();
                     if (_chatPanel != null) _chatPanel.Children.Clear();
-                    _cachedCanvasState = null;
-                    _canvasChanged = true;
                 if (_txtInput != null) _txtInput.Clear();
                 RefreshAttachmentPreview();
                 if (_btnClearImage != null) _btnClearImage.Visibility = Visibility.Collapsed;

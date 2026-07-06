@@ -111,7 +111,7 @@ namespace Magpie.HostBridge
                     await WriteJsonResponseAsync(response, new JObject
                     {
                         ["status"] = "ok",
-                        ["service"] = "addgh-host-bridge",
+                        ["service"] = "magpie-host-bridge",
                         ["port"] = _port
                     }).ConfigureAwait(false);
                     return;

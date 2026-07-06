@@ -89,7 +89,7 @@ namespace Magpie
                 return null;
 
             _finalVisualReviewAttempted = true;
-            string ghCheck = IsSelfTrainingMode() ? ExecuteCheckGhErrors() : null;
+            string ghCheck = IsSelfTrainingMode() ? Magpie.Host.GrasshopperDocumentHost.ExecuteCheckGhErrors() : null;
             string finalVisualReview = await RunFinalVisualReviewAsync(fullContent, ct);
             if (string.IsNullOrWhiteSpace(finalVisualReview))
                 return null;

@@ -35,7 +35,7 @@ namespace Magpie
         private const int MaxCanvasUndoDeltaChainDepth = 8;
         private const int CanvasUndoDeltaBlockSize = 4096;
         private const int CanvasUndoDeltaMinSavings = 4096;
-        private static readonly byte[] CanvasUndoDeltaMagic = Encoding.ASCII.GetBytes("ADDGHUNDO1");
+        private static readonly byte[] CanvasUndoDeltaMagic = Encoding.ASCII.GetBytes("MAGPIEUNDO1");
 
         private static bool IsCanvasMutatingTool(string funcName)
         {
@@ -442,8 +442,6 @@ namespace Magpie
 
                     ResetPublicIdMap(restored);
                     RefreshPublicIdMap(restored);
-                    _canvasChanged = true;
-                    _cachedCanvasState = null;
                     try { restored.ScheduleSolution(80); } catch { }
                 }
                 catch (Exception ex)

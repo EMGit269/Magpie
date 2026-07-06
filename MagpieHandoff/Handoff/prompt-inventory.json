@@ -1,0 +1,73 @@
+{
+  "version": "2026-07-02",
+  "sources": {
+    "addgh_system_prompt": "ADDGH/ChatWindow.cs",
+    "context_pipeline": "ADDGH/Agent/ContextPipeline.cs",
+    "mode_skill_mixed": "skills/system_mixed_mode.md",
+    "mode_skill_csharp": "skills/system_csharp_mode.md",
+    "agent_service_runtime_prompt": "agent_service/app/runtime.py",
+    "workflow_fallback": "agent_service/app/workflow.py",
+    "langchain_settings": "ADDGH/LangChain/LangChainSettings.cs"
+  },
+  "addgh_prompt_stack": {
+    "base_constant": "SYSTEM_PROMPT",
+    "assembly_order": [
+      "SYSTEM_PROMPT",
+      "BuildModePrompt(_layoutMode)",
+      "GetModeSystemSkillPrompt()",
+      "BuildCSharpDedicatedToolPrompt() when execution mode and CSharpFirst",
+      "BuildSelfTrainingPrompt() when AgentMode.SelfTrain"
+    ],
+    "context_pipeline_order": [
+      "BasePromptProvider",
+      "TypedPromptProvider",
+      "ContextPackProvider",
+      "ContextLedgerProvider",
+      "SkillSummaryProvider"
+    ],
+    "major_rule_blocks": [
+      "grasshopper_modeling_rules",
+      "visual_multimodal_routing",
+      "tool_efficiency_rules",
+      "user_facing_response_rules"
+    ]
+  },
+  "mode_skills": [
+    {
+      "name": "system-mixed-mode",
+      "trigger": "layout mode = Mixed",
+      "purpose": "choose boundary between native GH batteries and C# script"
+    },
+    {
+      "name": "system-csharp-mode",
+      "trigger": "layout mode = CSharpFirst",
+      "purpose": "force core modeling logic into one or a few C# Script components"
+    }
+  ],
+  "agent_service_runtime_prompt": {
+    "kind": "langchain dynamic_prompt middleware",
+    "major_sections": [
+      "external agent role statement",
+      "host mutation authority statement",
+      "session id",
+      "user goal",
+      "session facts",
+      "open tasks",
+      "recent messages",
+      "host tool count",
+      "brief planning and verification reminder"
+    ]
+  },
+  "workflow_fallback": {
+    "kind": "non-LLM minimal workflow path",
+    "components": [
+      "MinimalPlanner",
+      "MinimalVerifier",
+      "fixed host bridge calls"
+    ]
+  },
+  "langchain_window_defaults": {
+    "default_user_goal": "Use the separated LangChain window to work with Grasshopper through the local host bridge.",
+    "window_subtitle": "External agent runtime with local Grasshopper host tools"
+  }
+}

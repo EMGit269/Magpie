@@ -1,0 +1,20 @@
+[
+  {
+    "id": "task_bc329ae5ee",
+    "title": "Inspect current Grasshopper canvas",
+    "description": "Read current canvas summary before making decisions.",
+    "status": "todo",
+    "notes": "",
+    "created_at": "2026-07-03T07:58:34.320996Z",
+    "updated_at": "2026-07-03T07:58:34.320996Z"
+  },
+  {
+    "id": "task_8e45c46a62",
+    "title": "Check runtime errors",
+    "description": "Verify whether current canvas has runtime errors or warnings.",
+    "status": "todo",
+    "notes": "",
+    "created_at": "2026-07-03T07:58:34.322099Z",
+    "updated_at": "2026-07-03T07:58:34.322099Z"
+  }
+]

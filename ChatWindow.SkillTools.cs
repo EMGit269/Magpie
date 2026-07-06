@@ -157,8 +157,6 @@ namespace Magpie
                         }
 
                         RefreshPublicIdMap(targetDoc);
-                        _canvasChanged = true;
-                        _cachedCanvasState = null;
                         try { targetDoc.ScheduleSolution(150); } catch { }
                         try { Grasshopper.Instances.ActiveCanvas?.Refresh(); } catch { }
 

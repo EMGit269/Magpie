@@ -1,0 +1,13 @@
+{
+  "session_id": "test",
+  "user_goal": "",
+  "facts": {},
+  "host_capabilities": [],
+  "recent_messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    }
+  ],
+  "updated_at": "2026-07-03T05:53:59.310685Z"
+}

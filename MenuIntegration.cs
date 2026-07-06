@@ -3,7 +3,7 @@ using System.Windows.Forms;
 using Grasshopper.Kernel;
 using Grasshopper.GUI;
 using Grasshopper.GUI.Canvas;
-using Magpie.LangChain;
+using Magpie.AgentRuntime;
 
 namespace Magpie
 {
@@ -39,14 +39,10 @@ namespace Magpie
             }
 
             ToolStripMenuItem rootMenu = new ToolStripMenuItem("Magpie");
-
-            ToolStripMenuItem openMenu = new ToolStripMenuItem("Open Agent");
-            openMenu.Click += (s, e) =>
+            rootMenu.Click += (s, e) =>
             {
                 MagpieWindow.Show();
             };
-
-            rootMenu.DropDownItems.Add(openMenu);
             editor.MainMenuStrip.Items.Add(rootMenu);
         }
     }

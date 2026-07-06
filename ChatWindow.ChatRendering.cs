@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -705,7 +705,7 @@ namespace Magpie
         {
             string canvasJson = "";
             Rhino.RhinoApp.InvokeOnUiThread((Action)(() => {
-                canvasJson = ExecuteGetGhComponents();
+                canvasJson = Magpie.Host.GrasshopperDocumentHost.ExecuteGetCanvasSummary();
             }));
 
             System.Threading.Tasks.Task.Run(() => {
@@ -926,17 +926,11 @@ namespace Magpie
 
             bool HasMagpieSubfolder(string d) =>
                 !string.IsNullOrEmpty(d)
-                && (
-                    System.IO.File.Exists(System.IO.Path.Combine(d, "Magpie", "Magpie.csproj"))
-                    || System.IO.File.Exists(System.IO.Path.Combine(d, "ADDGH", "ADDGH.csproj"))
-                );
+                && System.IO.File.Exists(System.IO.Path.Combine(d, "Magpie", "Magpie.csproj"));
 
             bool HasMagpieProject(string d) =>
                 !string.IsNullOrEmpty(d)
-                && (
-                    System.IO.File.Exists(System.IO.Path.Combine(d, "Magpie.csproj"))
-                    || System.IO.File.Exists(System.IO.Path.Combine(d, "ADDGH.csproj"))
-                );
+                && System.IO.File.Exists(System.IO.Path.Combine(d, "Magpie.csproj"));
 
             string TryWalk(string start, int maxSteps)
             {

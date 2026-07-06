@@ -61,7 +61,7 @@ namespace Magpie
             private static bool IsCanvasSuitableForReferenceSnapshot(out string reason)
             {
                 reason = null;
-                string json = ExecuteGetGhComponents();
+                string json = Magpie.Host.GrasshopperDocumentHost.ExecuteGetCanvasSummary();
                 if (string.IsNullOrWhiteSpace(json))
                 {
                     reason = "无法读取 Grasshopper 画布，请打开文档后再创建参考。";
@@ -90,7 +90,7 @@ namespace Magpie
                     return false;
                 }
 
-                string check = ExecuteCheckGhErrors() ?? "";
+                string check = Magpie.Host.GrasshopperDocumentHost.ExecuteCheckGhErrors() ?? "";
                 if (check.StartsWith("Error:", StringComparison.Ordinal))
                 {
                     reason = check;

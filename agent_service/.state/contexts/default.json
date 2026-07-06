@@ -1,0 +1,20 @@
+{
+  "session_id": "default",
+  "user_goal": "????agent?????????",
+  "facts": {
+    "last_workflow_status": "ok",
+    "last_workflow_summary": "Basic verification passed."
+  },
+  "host_capabilities": [],
+  "recent_messages": [
+    {
+      "role": "user",
+      "content": "?????GH????"
+    },
+    {
+      "role": "assistant",
+      "content": "Workflow completed.\nPlan: Start with canvas inspection, then optionally run error verification.\nVerification: Basic verification passed."
+    }
+  ],
+  "updated_at": "2026-07-01T09:45:58.652732Z"
+}

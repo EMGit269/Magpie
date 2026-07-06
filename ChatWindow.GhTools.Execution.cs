@@ -80,8 +80,6 @@ namespace Magpie
                         canvas.Refresh();
                     }
 
-                    _canvasChanged = true;
-                    _cachedCanvasState = null;
                     result = addedToServer
                         ? "未检测到可用画布，已新建空白 Grasshopper 画布。"
                         : "未检测到可用画布，已创建空白 Grasshopper 文档，但未能加入文档服务器。";
@@ -240,166 +238,6 @@ namespace Magpie
                 return true;
 
             return string.Equals(GetPublicId(doc, obj), token, StringComparison.OrdinalIgnoreCase);
-        }
-
-        internal static string ExecuteGetGhComponents()
-        {
-            string currentUnitSignature = GetRhinoUnitSignature();
-            if (!_canvasChanged && _cachedCanvasState != null && string.Equals(_cachedRhinoUnitSignature, currentUnitSignature, StringComparison.Ordinal)) {
-                return _cachedCanvasState;
-            }
-
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                RefreshPublicIdMap(doc);
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-
-                var graph = new JObject();
-                if (DeploymentOptions.IncludeCanvasExportTimestamp)
-                    graph["timestamp"] = DateTime.Now.ToString("HH:mm:ss");
-                graph["rhino_units"] = BuildRhinoUnitsJson();
-
-                var globalErrors = new JArray();
-                var components = new JArray();
-                var groups = new JArray(); // 存储组信息
-
-                foreach (var obj in doc.Objects)
-                {
-                    if (obj is Grasshopper.Kernel.Special.GH_Group group)
-                    {
-                        var groupJson = new JObject();
-                        groupJson["id"] = GetPublicId(doc, group);
-                        groupJson["guid"] = group.InstanceGuid.ToString();
-                        groupJson["name"] = group.NickName;
-                        var members = new JArray();
-                        foreach (var member in group.Objects())
-                        {
-                            members.Add(member != null ? GetPublicId(doc, member) : "");
-                        }
-                        groupJson["members"] = members;
-                        groups.Add(groupJson);
-                        continue;
-                    }
-
-                    var compJson = new JObject();
-                    compJson["name"] = obj.Name;
-                    compJson["nickname"] = obj.NickName;
-                    compJson["id"] = GetPublicId(doc, obj);
-                    compJson["guid"] = obj.InstanceGuid.ToString();
-                    compJson["pivot"] = new JObject { { "x", Math.Round(obj.Attributes.Pivot.X) }, { "y", Math.Round(obj.Attributes.Pivot.Y) } };
-                    AppendSliderStateJson(obj, compJson);
-
-                    // 检查报错
-                    if (obj is IGH_ActiveObject ao && ao.RuntimeMessageLevel != GH_RuntimeMessageLevel.Blank)
-                    {
-                        var msgs = new JArray();
-                        foreach (string m in ao.RuntimeMessages(GH_RuntimeMessageLevel.Error)) {
-                            msgs.Add("Error: " + m);
-                            globalErrors.Add(new JObject { { "id", GetPublicId(doc, obj) }, { "guid", obj.InstanceGuid.ToString() }, { "name", obj.Name }, { "level", "Error" }, { "message", m } });
-                        }
-                        foreach (string m in ao.RuntimeMessages(GH_RuntimeMessageLevel.Warning)) {
-                            msgs.Add("Warning: " + m);
-                            globalErrors.Add(new JObject { { "id", GetPublicId(doc, obj) }, { "guid", obj.InstanceGuid.ToString() }, { "name", obj.Name }, { "level", "Warning" }, { "message", m } });
-                        }
-                        compJson["runtime_messages"] = msgs;
-                    }
-
-                    if (obj is Grasshopper.Kernel.IGH_Component comp)
-                    {
-                        var inputs = new JArray();
-                        for (int i = 0; i < comp.Params.Input.Count; i++)
-                        {
-                            var param = comp.Params.Input[i];
-                            var paramJson = new JObject();
-                            paramJson["index"] = i;
-                            paramJson["name"] = param.Name;
-                            paramJson["type"] = param.TypeName;
-                            AppendPortMetadataJson(paramJson, param);
-
-                            // 增加数据结构概况
-                            if (param.VolatileDataCount > 0) {
-                                var tree = param.VolatileData;
-                                paramJson["data_structure"] = $"Tree ({tree.PathCount} branches, {tree.DataCount} items total)";
-                            } else {
-                                paramJson["data_structure"] = "Empty";
-                            }
-
-                            // 增加数据操作状态
-                            if (param.DataMapping == Grasshopper.Kernel.GH_DataMapping.Flatten) paramJson["is_flattened"] = true;
-                            if (param.DataMapping == Grasshopper.Kernel.GH_DataMapping.Graft) paramJson["is_grafted"] = true;
-                            if (param.Reverse) paramJson["is_reversed"] = true;
-                            if (param.Simplify) paramJson["is_simplified"] = true;
-                            AppendParamDataPreviewJson(paramJson, param);
-
-                            var sources = new JArray();
-                            foreach (var source in param.Sources)
-                            {
-                                var srcObj = source.Attributes.GetTopLevel.DocObject;
-                                int srcIdx = (srcObj is Grasshopper.Kernel.IGH_Component srcC) ? srcC.Params.Output.IndexOf(source) : 0;
-                                sources.Add(new JObject { { "id", GetPublicId(doc, srcObj) }, { "guid", srcObj.InstanceGuid.ToString() }, { "output_index", srcIdx }, { "name", srcObj.Name } });
-                            }
-                            paramJson["sources"] = sources;
-                            if (param.SourceCount == 0 && param.VolatileDataCount > 0) paramJson["has_internal_data"] = true;
-                            inputs.Add(paramJson);
-                        }
-                        compJson["inputs"] = inputs;
-
-                        var outputs = new JArray();
-                        for (int i = 0; i < comp.Params.Output.Count; i++)
-                        {
-                            var param = comp.Params.Output[i];
-                            var portJson = new JObject { { "index", i }, { "name", param.Name }, { "type", param.TypeName } };
-                            AppendPortMetadataJson(portJson, param, IsCSharpScriptComponent(obj));
-                            if (param.VolatileDataCount > 0) {
-                                portJson["data_structure"] = $"Tree ({param.VolatileData.PathCount} branches, {param.VolatileData.DataCount} items total)";
-                            }
-                            if (param.DataMapping == Grasshopper.Kernel.GH_DataMapping.Flatten) portJson["is_flattened"] = true;
-                            if (param.DataMapping == Grasshopper.Kernel.GH_DataMapping.Graft) portJson["is_grafted"] = true;
-                            if (param.Reverse) portJson["is_reversed"] = true;
-                            if (param.Simplify) portJson["is_simplified"] = true;
-                            AppendParamDataPreviewJson(portJson, param);
-                            outputs.Add(portJson);
-                        }
-                        compJson["outputs"] = outputs;
-                    }
-                    else if (obj is Grasshopper.Kernel.IGH_Param param)
-                    {
-                        compJson["type"] = param.TypeName;
-                        AppendPortMetadataJson(compJson, param);
-                        if (param.VolatileDataCount > 0) {
-                            compJson["data_structure"] = $"Tree ({param.VolatileData.PathCount} branches, {param.VolatileData.DataCount} items total)";
-                        }
-                        if (param.DataMapping == Grasshopper.Kernel.GH_DataMapping.Flatten) compJson["is_flattened"] = true;
-                        if (param.DataMapping == Grasshopper.Kernel.GH_DataMapping.Graft) compJson["is_grafted"] = true;
-                        if (param.Reverse) compJson["is_reversed"] = true;
-                        if (param.Simplify) compJson["is_simplified"] = true;
-                        AppendParamDataPreviewJson(compJson, param);
-
-                        var sources = new JArray();
-                        foreach (var source in param.Sources)
-                        {
-                            var srcObj = source.Attributes.GetTopLevel.DocObject;
-                            int srcIdx = (srcObj is Grasshopper.Kernel.IGH_Component srcC) ? srcC.Params.Output.IndexOf(source) : 0;
-                            sources.Add(new JObject { { "id", GetPublicId(doc, srcObj) }, { "guid", srcObj.InstanceGuid.ToString() }, { "output_index", srcIdx }, { "name", srcObj.Name } });
-                        }
-                        compJson["sources"] = sources;
-                    }
-                    AppendScriptBodiesToComponentJson(compJson, obj);
-                    components.Add(compJson);
-                }
-                graph["canvas_errors"] = globalErrors;
-                graph["components"] = components;
-                graph["groups"] = groups;
-
-                result = graph.ToString(Formatting.None); // 使用压缩格式节省 Token
-                _cachedCanvasState = result;
-                _cachedRhinoUnitSignature = currentUnitSignature;
-                _canvasChanged = false;
-                UpdateCodeView();
-            }));
-            return result;
         }
 
         // ── 共享序列化 helper（不改变任何字段结构）──────────────────────────
@@ -1155,105 +993,6 @@ namespace Magpie
             return result;
         }
 
-        internal static string ExecuteQueryGhComponents(
-            string id = null,
-            string nameContains = null,
-            bool? hasErrors = null,
-            bool? isScript = null,
-            bool? hasConnections = null,
-            string portNameContains = null,
-            int maxResults = 8,
-            int neighborDepth = 1)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-
-                string idNeedle = (id ?? "").Trim();
-                string nameNeedle = (nameContains ?? "").Trim();
-                string portNeedle = (portNameContains ?? "").Trim();
-                maxResults = Math.Max(1, Math.Min(50, maxResults));
-                neighborDepth = Math.Max(0, Math.Min(2, neighborDepth));
-
-                var matched = new List<Grasshopper.Kernel.IGH_DocumentObject>();
-                foreach (var obj in doc.Objects)
-                {
-                    if (obj is Grasshopper.Kernel.Special.GH_Group) continue;
-
-                    if (idNeedle.Length > 0 && !obj.InstanceGuid.ToString().Equals(idNeedle, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    if (nameNeedle.Length > 0)
-                    {
-                        bool nameMatch =
-                            (!string.IsNullOrEmpty(obj.Name) && obj.Name.IndexOf(nameNeedle, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                            (!string.IsNullOrEmpty(obj.NickName) && obj.NickName.IndexOf(nameNeedle, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!nameMatch) continue;
-                    }
-
-                    if (hasErrors.HasValue)
-                    {
-                        GetComponentIssueCounts(obj, out int errorCount, out int warningCount, out _);
-                        bool objHasErrors = errorCount > 0 || warningCount > 0;
-                        if (objHasErrors != hasErrors.Value) continue;
-                    }
-
-                    if (isScript.HasValue && ComponentLooksLikeScript(obj) != isScript.Value)
-                        continue;
-
-                    if (hasConnections.HasValue && ComponentHasConnections(obj) != hasConnections.Value)
-                        continue;
-
-                    if (portNeedle.Length > 0 && !ComponentHasPortName(obj, portNeedle))
-                        continue;
-
-                    matched.Add(obj);
-                }
-
-                var hits = new JArray();
-                foreach (var obj in matched.Take(maxResults))
-                {
-                    var hit = new JObject
-                    {
-                        ["summary"] = BuildComponentQuerySummary(obj),
-                        ["component"] = BuildComponentJson(obj, false)
-                    };
-
-                    if (neighborDepth > 0)
-                    {
-                        var neighbors = new JArray();
-                        foreach (var ctxObj in CollectComponentContextObjects(doc, obj, neighborDepth))
-                        {
-                            if (ctxObj.InstanceGuid == obj.InstanceGuid) continue;
-                            neighbors.Add(BuildComponentQuerySummary(ctxObj));
-                        }
-                        hit["neighbors"] = neighbors;
-                    }
-
-                    hits.Add(hit);
-                }
-
-                result = new JObject
-                {
-                    ["query"] = new JObject
-                    {
-                        ["id"] = idNeedle,
-                        ["name_contains"] = nameNeedle,
-                        ["has_errors"] = hasErrors.HasValue ? JToken.FromObject(hasErrors.Value) : JValue.CreateNull(),
-                        ["is_script"] = isScript.HasValue ? JToken.FromObject(isScript.Value) : JValue.CreateNull(),
-                        ["has_connections"] = hasConnections.HasValue ? JToken.FromObject(hasConnections.Value) : JValue.CreateNull(),
-                        ["port_name_contains"] = portNeedle,
-                        ["neighbor_depth"] = neighborDepth
-                    },
-                    ["total_hits"] = matched.Count,
-                    ["returned_hits"] = hits.Count,
-                    ["hits"] = hits
-                }.ToString(Formatting.None);
-            }));
-            return result;
-        }
 
         private static string ExecuteGetCanvasSummary()
         {
@@ -1301,40 +1040,7 @@ namespace Magpie
         }
 
         // ── 上下文：目标 + 前后各 depth 层邻居（完整详情）───────────────────
-        internal static string ExecuteGetComponentContext(string id, int depth = 1, bool includeScriptBodies = false)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-                if (!Guid.TryParse(id, out Guid guid)) { result = "Error: ID 格式错误。"; return; }
-                var target = doc.FindObject(guid, true);
-                if (target == null) { result = "Error: 找不到该电池。"; return; }
 
-                var arr = new JArray();
-                foreach (var obj in CollectComponentContextObjects(doc, target, depth))
-                    arr.Add(BuildComponentJson(obj, includeScriptBodies));
-                result = new JObject { ["context_components"] = arr }.ToString(Formatting.None);
-            }));
-            return result;
-        }
-
-        internal static string ExecuteReadComponentScript(string id)
-        {
-            const int readCap = 150000;
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-                if (!Guid.TryParse(id, out Guid guid)) { result = "Error: ID 格式错误。"; return; }
-                var obj = doc.FindObject(guid, true);
-                if (obj == null) { result = "Error: 找不到该电池。"; return; }
-                result = GhReadScriptSourceViaReflection(obj, readCap, Math.Min(readCap, 120000));
-            }));
-            return result;
-        }
 
         private static void SyncCodeIssuesStripHeightToInputArea()
         {
@@ -1346,7 +1052,6 @@ namespace Magpie
 
         private static void ScheduleCodeSurfaceRefreshFromCanvas()
         {
-            _canvasChanged = true;
             if (_window?.Dispatcher == null) return;
 
             Action armTimer = () =>
@@ -1366,7 +1071,6 @@ namespace Magpie
                     }
                     Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
                     {
-                        _canvasChanged = true;
                         UpdateCodeView();
                     }));
                 };
@@ -1378,6 +1082,10 @@ namespace Magpie
             else
                 _window.Dispatcher.Invoke(armTimer);
         }
+
+
+
+
 
         private static void OnGhDocObjectsChanged(object sender, GH_DocObjectEventArgs e)
         {
@@ -1495,7 +1203,7 @@ namespace Magpie
 
             if (!_isJsonMode)
             {
-                string raw = ExecuteGetGhComponents();
+                string raw = Magpie.Host.GrasshopperDocumentHost.ExecuteGetCanvasSummary();
                 Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
                 {
                     try {
@@ -1804,7 +1512,6 @@ namespace Magpie
                     panel.UserText = value;
                 }
 
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(150); }
                 catch (Exception ex) { AddGhLog.Warn("ExecuteAddGhComponent Schedule failed: " + ex.Message); }
                 string displayName = !string.IsNullOrWhiteSpace(name) ? name : (obj.Name ?? "组件");
@@ -1898,65 +1605,7 @@ namespace Magpie
             return false;
         }
 
-        internal static string ExecuteConnectGhComponents(string fromId, int fromIndex, string toId, int toIndex, string fromPortLabel = null, string toPortLabel = null)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-                if (!Guid.TryParse(fromId, out Guid guidFrom) || !Guid.TryParse(toId, out Guid guidTo)) { result = "Error: ID 格式错误。"; return; }
 
-                var objFrom = doc.FindObject(guidFrom, true);
-                var objTo = doc.FindObject(guidTo, true);
-                if (objFrom == null || objTo == null) { result = "Error: 找不到电池。"; return; }
-
-                Grasshopper.Kernel.IGH_Param sourceParam;
-                Grasshopper.Kernel.IGH_Param targetParam;
-                int resolvedFromIndex;
-                int resolvedToIndex;
-                string sourceError;
-                string targetError;
-                if (!TryResolveConnectPort(objFrom, true, fromIndex, fromPortLabel, out sourceParam, out resolvedFromIndex, out sourceError))
-                {
-                    result = "Error: source " + sourceError;
-                    return;
-                }
-                if (!TryResolveConnectPort(objTo, false, toIndex, toPortLabel, out targetParam, out resolvedToIndex, out targetError))
-                {
-                    result = "Error: target " + targetError;
-                    return;
-                }
-
-                targetParam.AddSource(sourceParam);
-                _canvasChanged = true;
-                try { doc.ScheduleSolution(150); }
-                catch (Exception ex) { AddGhLog.Warn("ExecuteConnectGhComponents Schedule failed: " + ex.Message); }
-                result = "Connection succeeded (" + DescribePortCandidate(resolvedFromIndex, sourceParam) + " -> " + DescribePortCandidate(resolvedToIndex, targetParam) + ").";
-                result += GetCanvasErrors(doc);
-            }));
-            return result;
-        }
-
-        internal static string ExecuteRemoveGhComponent(string id)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-                if (!Guid.TryParse(id, out Guid guid)) { result = "Error: ID 格式错误。"; return; }
-                var obj = doc.FindObject(guid, true);
-                if (obj == null) { result = "Error: 找不到电池。"; return; }
-
-                doc.RemoveObject(obj, false);
-                result = "删除成功。";
-                _canvasChanged = true;
-                try { doc.ScheduleSolution(150); }
-                catch (Exception ex) { AddGhLog.Warn("ExecuteRemoveGhComponent Schedule failed: " + ex.Message); }
-            }));
-            return result;
-        }
 
         private static bool GhScriptMetaExcludedName(string pn)
         {
@@ -2257,7 +1906,6 @@ namespace Magpie
             if (doc == null) return;
             try { obj?.ExpireSolution(true); }
             catch (Exception ex) { AddGhLog.Debug("FinalizeGrasshopperScriptMutation Expire failed: " + ex.Message); }
-            _canvasChanged = true;
             try { doc.ScheduleSolution(120); }
             catch (Exception ex) { AddGhLog.Warn("FinalizeGrasshopperScriptMutation Schedule(120) failed: " + ex.Message); }
             // A second delayed solve helps freshly edited script bodies and recent port changes settle
@@ -2495,107 +2143,6 @@ namespace Magpie
             return value;
         }
 
-        internal static string ExecuteSetGhComponentValue(string id, string value, double? min, double? max, int? decimals, string exactMember = null, string graphMapperType = null)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-                if (!Guid.TryParse(id, out Guid guid)) { result = "Error: ID 格式错误。"; return; }
-                var obj = doc.FindObject(guid, true);
-                if (obj == null) { result = "Error: 找不到电池。"; return; }
-
-                if (_layoutMode == LayoutMode.CSharpFirst && IsCSharpScriptComponent(obj))
-                {
-                    result = "Error: C# priority mode does not allow set_gh_component_value to edit C# Script source. Use edit_csharp_script_component with mode=set_body.";
-                    return;
-                }
-
-                if (IsGraphMapperObject(obj)) {
-                    string requestedGraphType = FirstNonEmpty(
-                        graphMapperType,
-                        string.Equals(exactMember, "graph_mapper_type", StringComparison.OrdinalIgnoreCase) ? value : null,
-                        string.Equals(exactMember, "graph_type", StringComparison.OrdinalIgnoreCase) ? value : null,
-                        value,
-                        DefaultGraphMapperType);
-                    if (!TrySetGraphMapperType(obj, requestedGraphType, out string graphMapperDetail))
-                    {
-                        result = graphMapperDetail;
-                        return;
-                    }
-                    _canvasChanged = true;
-                    try { doc.ScheduleSolution(150); }
-                    catch (Exception ex) { AddGhLog.Warn("ExecuteSetGhComponentValue (Graph Mapper) Schedule failed: " + ex.Message); }
-                    result = graphMapperDetail + "。";
-                } else if (obj is Grasshopper.Kernel.Special.GH_NumberSlider slider) {
-                    List<string> changes = new List<string>();
-
-                    if (min.HasValue) {
-                        slider.Slider.Minimum = (decimal)min.Value;
-                        changes.Add("最小值=" + min.Value);
-                    }
-                    if (max.HasValue) {
-                        slider.Slider.Maximum = (decimal)max.Value;
-                        changes.Add("最大值=" + max.Value);
-                    }
-                    if (decimals.HasValue) {
-                        int dec = Math.Max(0, Math.Min(10, decimals.Value));
-                        slider.Slider.DecimalPlaces = dec;
-                        changes.Add("小数位=" + dec);
-                    }
-
-                    if (value != null) {
-                        if (decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal decVal)) {
-                            decimal applied = ClampSliderValue(slider, decVal);
-                            slider.Slider.Value = applied;
-                            changes.Add("值=" + applied);
-                            if (applied != decVal)
-                                changes.Add("原请求值已按范围夹紧(" + decVal + "→" + applied + ")");
-                        } else { result = "Error: 数值解析失败。"; return; }
-                    }
-
-                    if (changes.Count > 0) {
-                        _canvasChanged = true;
-                        try { doc.ScheduleSolution(150); }
-                        catch (Exception ex) { AddGhLog.Warn("ExecuteSetGhComponentValue (Slider) Schedule failed: " + ex.Message); }
-                        result = "Slider 设置成功：" + string.Join("，", changes);
-                    } else {
-                        result = "未指定任何属性更改。";
-                    }
-                } else if (obj is Grasshopper.Kernel.Special.GH_Panel panel) {
-                    if (value == null) {
-                        result = "Error: Panel 必须提供 value 参数。"; return;
-                    }
-                    panel.UserText = value;
-                    _canvasChanged = true;
-                    try { doc.ScheduleSolution(150); }
-                    catch (Exception ex) { AddGhLog.Warn("ExecuteSetGhComponentValue (Panel) Schedule failed: " + ex.Message); }
-                    result = "Panel 设置成功。";
-                } else if (value == null) {
-                    result = "Error: 修改脚本/表达式电池必须在 value 中提供完整代码或公式文本。";
-                } else if (!string.IsNullOrWhiteSpace(exactMember) && TrySetScriptMemberExact(obj, exactMember, value, out string byName)) {
-                    FinalizeGrasshopperScriptMutation(doc, obj);
-                    result = "已按指定成员写入脚本/表达式（" + byName + "）。";
-                    _canvasChanged = true;
-                } else if (TrySetNativeScriptContentViaReflection(obj, value)) {
-                    FinalizeGrasshopperScriptMutation(doc, obj);
-                    result = "已写入内置脚本内容（反射 m_codeBlocks）。";
-                    _canvasChanged = true;
-                } else if (TrySetGrasshopperScriptOrFormula(obj, value, out string propName)) {
-                    FinalizeGrasshopperScriptMutation(doc, obj);
-                    result = "已写入脚本/表达式内容（" + propName + "）。";
-                    _canvasChanged = true;
-                } else {
-                    string hint = DescribeWritableStringProperties(obj);
-                    result = "Error: 未能自动写入代码/公式（未找到合适的 string 成员或写入被拒绝）。"
-                        + hint
-                        + " 可在 set_gh_component_value 中传 property 指定成员名；或根据 get_gh_components 中的 runtime_type_hint 反馈插件作者扩展。";
-                }
-                result += GetCanvasErrors(doc);
-            }));
-            return result;
-        }
 
         private static string ExecuteModifyGhPortData(string id, bool isInput, int index, string operation)
         {
@@ -2637,7 +2184,6 @@ namespace Magpie
                 }
 
                 param.ExpireSolution(true);
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(150); }
                 catch (Exception ex) { AddGhLog.Warn("ExecuteModifyGhPortData Schedule failed: " + ex.Message); }
                 result = "端口数据操作成功。";
@@ -2660,7 +2206,6 @@ namespace Magpie
                 Grasshopper.Kernel.IGH_Param targetParam = (objTo is Grasshopper.Kernel.IGH_Component cT) ? (toIndex < cT.Params.Input.Count ? cT.Params.Input[toIndex] : null) : (objTo as Grasshopper.Kernel.IGH_Param);
                 if (sourceParam == null || targetParam == null) { result = "Error: 端口越界。"; return; }
                 targetParam.RemoveSource(sourceParam);
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(150); }
                 catch (Exception ex) { AddGhLog.Warn("ExecuteRemoveGhConnection Schedule failed: " + ex.Message); }
                 result = "连线已断开。";
@@ -3686,327 +3231,7 @@ namespace Magpie
             return obj.GetType()?.GetField("m_codeBlocks", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) != null;
         }
 
-        internal static string ExecuteEditCSharpScriptComponent(string id, string mode, string body)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() => {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: no active Grasshopper canvas."; return; }
-                if (!Guid.TryParse(id, out Guid guid)) { result = "Error: invalid component id."; return; }
-                var obj = doc.FindObject(guid, true);
-                if (obj == null) { result = "Error: component not found."; return; }
-                if (!IsCSharpScriptComponent(obj))
-                {
-                    result = "Error: target is not a Grasshopper C# Script component.";
-                    return;
-                }
 
-                string m = (mode ?? "").Trim();
-                if (m.Equals("read_body", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (TryReadCSharpScriptBodyPreservingTemplate(obj, out string currentBody, out string detail))
-                    {
-                        var payload = new JObject
-                        {
-                            ["status"] = "ok",
-                            ["mode"] = "read_body",
-                            ["id"] = GetPublicId(doc, obj),
-                            ["guid"] = obj.InstanceGuid.ToString(),
-                            ["body"] = currentBody,
-                            ["source"] = detail,
-                            ["warning"] = "This is only the editable RunScript body. Do not add using/class/signature when writing it back."
-                        };
-                        result = payload.ToString(Formatting.None);
-                    }
-                    else
-                    {
-                        string fallback = GhReadScriptSourceViaReflection(obj, 150000, 120000);
-                        try
-                        {
-                            var jo = JObject.Parse(fallback);
-                            var payload = new JObject
-                            {
-                                ["status"] = "ok",
-                                ["mode"] = "read_body",
-                                ["id"] = GetPublicId(doc, obj),
-                                ["guid"] = obj.InstanceGuid.ToString(),
-                                ["body"] = jo["primary_for_edit"]?.ToString() ?? "",
-                                ["source"] = jo["primary_key"]?.ToString() ?? "reflection_fallback",
-                                ["runtime_type_hint"] = jo["runtime_type_hint"]?.ToString() ?? "",
-                                ["warning"] = "Editable code block structure was not recognized; returned reflection-based fallback text."
-                            };
-                            result = payload.ToString(Formatting.None);
-                        }
-                        catch (Exception ex)
-                        {
-                            result = "Error: could not read the editable C# Script body without touching the template. " + ex.Message;
-                        }
-                    }
-                    return;
-                }
-
-                if (!m.Equals("set_body", StringComparison.OrdinalIgnoreCase))
-                {
-                    result = "Error: mode must be read_body or set_body.";
-                    return;
-                }
-                if (body == null)
-                {
-                    result = "Error: set_body requires body.";
-                    return;
-                }
-
-                var warnings = new List<string>();
-                if (!TryValidateCSharpOutputUsage(body, GetCSharpOutputVariableNames(obj), out string outputUsageError))
-                {
-                    result = "Error: " + outputUsageError;
-                    return;
-                }
-
-                var typedBindings = BuildCSharpTypedInputBindingsFromComponent(obj, warnings);
-                string rewrittenBody = ApplyCSharpTypedInputBindingsToBody(body, typedBindings, warnings);
-                bool wrote = TrySetCSharpScriptBodyIntoTemplate(obj, rewrittenBody, warnings);
-                if (!wrote)
-                {
-                    result = "Error: could not write C# Script body safely. The editable block structure was not recognized.";
-                    if (warnings.Count > 0) result += " " + string.Join(" ", warnings);
-                    return;
-                }
-
-                FinalizeGrasshopperScriptMutation(doc, obj);
-                var payloadSet = new JObject
-                {
-                    ["status"] = "ok",
-                    ["mode"] = "set_body",
-                    ["id"] = GetPublicId(doc, obj),
-                    ["guid"] = obj.InstanceGuid.ToString(),
-                    ["template_preserved"] = true,
-                    ["warnings"] = new JArray(warnings)
-                };
-                string errors = GetCanvasErrors(doc);
-                if (!string.IsNullOrWhiteSpace(errors)) payloadSet["canvas_errors"] = errors;
-                result = payloadSet.ToString(Formatting.None);
-            }));
-            return result;
-        }
-
-        internal static string ExecuteCreateCSharpScriptComponent(string aliasId, string label, float x, float y, JArray inputs, JArray outputs, string body, JArray components, JArray connections, string groupName = null)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() => {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: no active Grasshopper canvas."; return; }
-
-                aliasId = string.IsNullOrWhiteSpace(aliasId) ? "core" : aliasId.Trim();
-                var outputSpecs = BuildCSharpOutputPortsFromLabels(outputs);
-                var outputNames = new HashSet<string>(StringComparer.Ordinal)
-                {
-                    "a",
-                    "out"
-                };
-                foreach (var outputSpec in outputSpecs.OfType<JObject>())
-                {
-                    string outputName = outputSpec["name"]?.ToString()?.Trim();
-                    if (!IsValidCSharpIdentifier(outputName))
-                    {
-                        result = "Error: C# output port name must be a valid identifier: " + (outputName ?? "");
-                        return;
-                    }
-                    if (!outputNames.Add(outputName))
-                    {
-                        result = "Error: duplicate C# output port name: " + outputName;
-                        return;
-                    }
-                }
-
-                for (int i = 0; inputs != null && i < inputs.Count; i++)
-                {
-                    string inputName = inputs[i]?["name"]?.ToString()?.Trim();
-                    if (!IsValidCSharpIdentifier(inputName))
-                    {
-                        result = "Error: C# input port name must be a valid identifier: " + (inputName ?? "");
-                        return;
-                    }
-                    if (outputNames.Contains(inputName))
-                    {
-                        result = "Error: C# input port name '" + inputName + "' collides with reserved/output variable names. Rename the input.";
-                        return;
-                    }
-                }
-
-                var aliasSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                aliasSet.Add(aliasId);
-
-                var scriptProxy = FindExactComponentProxyByName("C# Script");
-                if (scriptProxy == null)
-                {
-                    result = "Error: cannot find C# Script component. Confirm the Grasshopper script component is loaded.";
-                    return;
-                }
-
-                if (components != null)
-                {
-                    foreach (var c in components)
-                    {
-                        string alias = c["alias_id"]?.ToString();
-                        if (string.IsNullOrWhiteSpace(alias)) { result = "Error: every helper component must provide alias_id."; return; }
-                        if (!aliasSet.Add(alias)) { result = "Error: duplicate alias_id: " + alias; return; }
-
-                        string name = c["name"]?.ToString();
-                        string cguid = c["component_guid"]?.ToString();
-                        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(cguid))
-                        {
-                            result = "Error: helper component " + alias + " must provide name or component_guid.";
-                            return;
-                        }
-
-                        var probe = InstantiateDocumentObjectFromLibrary(name ?? "", cguid);
-                        if (probe == null)
-                        {
-                            result = "Error: cannot instantiate helper component " + alias + ".";
-                            return;
-                        }
-                        if (!IsScriptModeAuxiliaryComponentAllowed(probe))
-                        {
-                            result = BuildScriptModeAuxiliaryComponentError(probe, name ?? alias);
-                            return;
-                        }
-                    }
-                }
-
-                var createdObjs = new Dictionary<string, Grasshopper.Kernel.IGH_DocumentObject>(StringComparer.OrdinalIgnoreCase);
-                var aliasMap = new JObject();
-                var warnings = new List<string>();
-
-                var scriptObj = scriptProxy.CreateInstance() as Grasshopper.Kernel.IGH_DocumentObject;
-                if (!(scriptObj is Grasshopper.Kernel.IGH_Component))
-                {
-                    result = "Error: C# Script component cannot be instantiated as a connectable component.";
-                    return;
-                }
-                scriptObj.CreateAttributes();
-                scriptObj.Attributes.Pivot = new System.Drawing.PointF(x, y);
-                doc.AddObject(scriptObj, false);
-
-                WaitForUiResponsiveDelay(500);
-
-                if (!string.IsNullOrWhiteSpace(label))
-                {
-                    scriptObj.NickName = label.Trim();
-                    scriptObj.Attributes?.ExpireLayout();
-                }
-
-                TryConfigureCSharpScriptPortsAfterDefaultCreate(scriptObj, inputs, outputSpecs, warnings);
-
-                if (!TryValidateCSharpOutputUsage(body, GetCSharpOutputVariableNames(scriptObj), out string outputUsageError))
-                {
-                    result = "Error: " + outputUsageError;
-                    return;
-                }
-
-                var typedBindings = BuildCSharpTypedInputBindings(inputs, warnings);
-                string rewrittenBody = ApplyCSharpTypedInputBindingsToBody(body ?? "", typedBindings, warnings);
-                bool wrote = TrySetCSharpScriptBodyIntoTemplate(scriptObj, rewrittenBody, warnings);
-                if (wrote)
-                {
-                    // Give Grasshopper a brief moment after dynamic port reconfiguration, then trigger
-                    // the standard two-pass solve so the agent does not need a separate recompute step.
-                    WaitForUiResponsiveDelay(120);
-                    FinalizeGrasshopperScriptMutation(doc, scriptObj);
-                }
-                else warnings.Add("C# Script body was not written.");
-
-                createdObjs[aliasId] = scriptObj;
-                aliasMap[aliasId] = scriptObj.InstanceGuid.ToString();
-
-                if (components != null)
-                {
-                    foreach (var c in components)
-                    {
-                        string name = c["name"]?.ToString();
-                        string cguid = c["component_guid"]?.ToString();
-                        string helperLabel = c["label"]?.ToString();
-                        float hx = c["x"]?.ToObject<float>() ?? 0;
-                        float hy = c["y"]?.ToObject<float>() ?? 0;
-                        string val = c["value"]?.ToString();
-                        string graphMapperType = GetGraphMapperTypeRequest(c, val);
-                        double? min = c["min"]?.ToObject<double>();
-                        double? max = c["max"]?.ToObject<double>();
-                        int? decimals = c["decimals"]?.ToObject<int>();
-                        string alias = c["alias_id"]?.ToString();
-
-                        var obj = InstantiateDocumentObjectFromLibrary(name ?? "", cguid);
-                        obj.CreateAttributes();
-                        obj.Attributes.Pivot = new System.Drawing.PointF(hx, hy);
-                        if (!string.IsNullOrEmpty(helperLabel)) obj.NickName = helperLabel;
-                        bool isGraphMapper = IsGraphMapperObject(obj);
-                        if (isGraphMapper && !TrySetGraphMapperType(obj, graphMapperType, out string graphMapperDetail))
-                        {
-                            result = graphMapperDetail;
-                            return;
-                        }
-                        doc.AddObject(obj, false);
-
-                        if (obj is Grasshopper.Kernel.Special.GH_NumberSlider slider)
-                        {
-                            if (min.HasValue) slider.Slider.Minimum = (decimal)min.Value;
-                            if (max.HasValue) slider.Slider.Maximum = (decimal)max.Value;
-                            if (decimals.HasValue) slider.Slider.DecimalPlaces = Math.Max(0, Math.Min(10, decimals.Value));
-                            if (!string.IsNullOrEmpty(val) && decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal d))
-                                slider.Slider.Value = ClampSliderValue(slider, d);
-                        }
-                        else if (obj is Grasshopper.Kernel.Special.GH_Panel panel && !string.IsNullOrEmpty(val))
-                        {
-                            panel.UserText = val;
-                        }
-                        else if (isGraphMapper)
-                        {
-                        }
-
-                        createdObjs[alias] = obj;
-                        aliasMap[alias] = obj.InstanceGuid.ToString();
-                    }
-                }
-
-                int connected = 0;
-                if (connections != null)
-                {
-                    warnings.Add("C# Script connections were skipped during creation to avoid Grasshopper/Rhino crashes. Use connect_gh_components in a later step after the C# Script component is stable.");
-                }
-
-                if (!string.IsNullOrWhiteSpace(groupName) && createdObjs.Count > 0)
-                {
-                    var group = new Grasshopper.Kernel.Special.GH_Group();
-                    group.NickName = groupName;
-                    group.Colour = System.Drawing.Color.FromArgb(80, 100, 150, 250);
-                    foreach (var obj in createdObjs.Values) group.AddObject(obj.InstanceGuid);
-                    doc.AddObject(group, false);
-                    try { group.ExpireSolution(false); } catch { }
-                }
-
-                _canvasChanged = true;
-                try { doc.ScheduleSolution(520); }
-                catch (Exception ex) { AddGhLog.Warn("ExecuteCreateCSharpScriptComponent Schedule failed: " + ex.Message); }
-
-                var payload = new JObject
-                {
-                    ["status"] = "ok",
-                    ["mode"] = "csharp",
-                    ["created_scripts"] = 1,
-                    ["created_components"] = components?.Count ?? 0,
-                    ["created_connections"] = connected,
-                    ["skipped_connections"] = connections?.Count ?? 0,
-                    ["script_write_ok"] = wrote ? 1 : 0,
-                    ["output_variables"] = new JArray(outputSpecs.OfType<JObject>().Select(o => o["name"]?.ToString()).Where(n => !string.IsNullOrWhiteSpace(n))),
-                    ["aliases"] = aliasMap,
-                    ["warnings"] = new JArray(warnings)
-                };
-                string errors = GetCanvasErrors(doc);
-                if (!string.IsNullOrWhiteSpace(errors)) payload["canvas_errors"] = errors;
-                result = payload.ToString(Formatting.None);
-            }));
-            return result;
-        }
 
         private static string ExecuteCreateScriptComponentGraph(string mode, JArray scripts, JArray components, JArray connections, string groupName = null)
         {
@@ -4224,7 +3449,6 @@ namespace Magpie
                     group.ExpireSolution(true);
                 }
 
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(150); }
                 catch (Exception ex) { AddGhLog.Warn("ExecuteCreateScriptComponentGraph Schedule failed: " + ex.Message); }
 
@@ -4246,145 +3470,6 @@ namespace Magpie
             return result;
         }
 
-        internal static string ExecuteCreateComponentGraph(JArray components, JArray connections, string groupName = null, string csharpFirstHelperReason = null, string csharpFirstHelperReasonDetail = null)
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() => {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-
-                Dictionary<string, Grasshopper.Kernel.IGH_DocumentObject> createdObjs = new Dictionary<string, Grasshopper.Kernel.IGH_DocumentObject>();
-                int createdCount = 0;
-                int connected = 0;
-
-                if (components != null) {
-                    foreach (var c in components) {
-                        string name = c["name"]?.ToString();
-                        string cguid = c["component_guid"]?.ToString();
-                        string label = c["label"]?.ToString();
-                        float x = c["x"]?.ToObject<float>() ?? 0;
-                        float y = c["y"]?.ToObject<float>() ?? 0;
-                        string val = c["value"]?.ToString();
-                        string graphMapperType = GetGraphMapperTypeRequest(c, val);
-                        double? min = c["min"]?.ToObject<double>();
-                        double? max = c["max"]?.ToObject<double>();
-                        int? decimals = c["decimals"]?.ToObject<int>();
-                        string alias = c["alias_id"]?.ToString();
-
-                        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(cguid))
-                            continue;
-
-                        var obj = InstantiateDocumentObjectFromLibrary(name ?? "", cguid);
-
-                        if (obj != null) {
-                            if (!ValidateCSharpFirstComponentCreation(obj, name ?? alias, csharpFirstHelperReason, out string csharpFirstReasonError))
-                            {
-                                result = csharpFirstReasonError;
-                                return;
-                            }
-
-                            obj.CreateAttributes();
-                            obj.Attributes.Pivot = new System.Drawing.PointF(x, y);
-                            if (!string.IsNullOrEmpty(label)) obj.NickName = label;
-                            bool isGraphMapper = IsGraphMapperObject(obj);
-                            if (isGraphMapper && !TrySetGraphMapperType(obj, graphMapperType, out string graphMapperDetail)) {
-                                result = graphMapperDetail;
-                                return;
-                            }
-                            doc.AddObject(obj, false);
-                            createdCount++;
-
-                            if (obj is Grasshopper.Kernel.Special.GH_NumberSlider s) {
-                                if (min.HasValue) s.Slider.Minimum = (decimal)min.Value;
-                                if (max.HasValue) s.Slider.Maximum = (decimal)max.Value;
-                                if (decimals.HasValue) s.Slider.DecimalPlaces = Math.Max(0, Math.Min(10, decimals.Value));
-                                if (!string.IsNullOrEmpty(val) && decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal d))
-                                    s.Slider.Value = ClampSliderValue(s, d);
-                            }
-                            else if (isGraphMapper) {
-                            }
-                            else if (obj is Grasshopper.Kernel.Special.GH_Panel p && !string.IsNullOrEmpty(val)) {
-                                p.UserText = val;
-                            }
-                            else if (!string.IsNullOrEmpty(val) && TrySetGrasshopperScriptOrFormula(obj, val, out _)) {
-                                obj.ExpireSolution(true);
-                            }
-
-                            if (!string.IsNullOrEmpty(alias)) createdObjs[alias] = obj;
-                        }
-                    }
-                }
-
-                if (connections != null) {
-                    foreach (var conn in connections) {
-                        if (createdObjs.TryGetValue(conn["from_alias"]?.ToString(), out var f) && createdObjs.TryGetValue(conn["to_alias"]?.ToString(), out var t)) {
-                            int fIdx = conn["from_index"]?.ToObject<int>() ?? 0;
-                            int tIdx = conn["to_index"]?.ToObject<int>() ?? 0;
-                            var sP = (f is Grasshopper.Kernel.IGH_Component cF) ? (fIdx < cF.Params.Output.Count ? cF.Params.Output[fIdx] : null) : (f as Grasshopper.Kernel.IGH_Param);
-                            var tP = (t is Grasshopper.Kernel.IGH_Component cT) ? (tIdx < cT.Params.Input.Count ? cT.Params.Input[tIdx] : null) : (t as Grasshopper.Kernel.IGH_Param);
-                            if (sP != null && tP != null)
-                            {
-                                tP.AddSource(sP);
-                                connected++;
-                            }
-                        }
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(groupName) && createdObjs.Count > 0)
-                {
-                    var group = new Grasshopper.Kernel.Special.GH_Group();
-                    group.NickName = groupName;
-                    group.Colour = System.Drawing.Color.FromArgb(80, 100, 150, 250);
-                    foreach (var obj in createdObjs.Values) group.AddObject(obj.InstanceGuid);
-                    doc.AddObject(group, false);
-                    group.ExpireSolution(true);
-                }
-
-                _canvasChanged = true;
-                try { doc.ScheduleSolution(150); }
-                catch (Exception ex) { AddGhLog.Warn("ExecuteCreateComponentGraph Schedule failed: " + ex.Message); }
-                var payload = new JObject
-                {
-                    ["status"] = "ok",
-                    ["created_components"] = createdCount,
-                    ["created_connections"] = connected
-                };
-                string errors = GetCanvasErrors(doc);
-                if (!string.IsNullOrWhiteSpace(errors)) payload["canvas_errors"] = errors;
-                result = payload.ToString(Formatting.None);
-            }));
-            return result;
-        }
-
-        internal static string ExecuteCheckGhErrors()
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() => {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-                result = GetCanvasErrors(doc);
-                if (string.IsNullOrEmpty(result)) result = "一切正常。";
-            }));
-            return result;
-        }
-
-        internal static string ExecuteRecomputeGhCanvas()
-        {
-            string result = "";
-            Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-            {
-                var doc = Grasshopper.Instances.ActiveCanvas?.Document;
-                if (doc == null) { result = "Error: 没有打开的画布。"; return; }
-                _canvasChanged = true;
-                try { doc.ScheduleSolution(150); }
-                catch (Exception ex) { AddGhLog.Warn("ExecuteRecomputeGhCanvas Schedule failed: " + ex.Message); }
-                try { Grasshopper.Instances.ActiveCanvas?.Refresh(); }
-                catch (Exception ex) { AddGhLog.Debug("ExecuteRecomputeGhCanvas Refresh failed: " + ex.Message); }
-                result = "已触发画布重新求解（含延迟再算）。";
-            }));
-            return result;
-        }
 
         private static string ExecuteCaptureRhinoViewport(string framing, int? width, int? height, double? paddingRatio)
         {
@@ -4819,7 +3904,6 @@ namespace Magpie
         /// <summary> OK 已把脚本写回电池并会自行触发求解；此处仅轻量排队，避免与编辑器内部 NewSolution 重入。 </summary>
         private static void AfterNativeScriptEditorCommit(GH_Document doc)
         {
-            _canvasChanged = true;
             try { doc?.ScheduleSolution(80); } catch (Exception ex) { AddGhLog.Debug("AfterNativeScriptEditorCommit Schedule: " + ex.Message); }
             try { Grasshopper.Instances.ActiveCanvas?.Refresh(); } catch { }
         }
@@ -4896,7 +3980,6 @@ namespace Magpie
                         if (directSetSuccess)
                         {
                             obj.ExpireSolution(true);
-                            _canvasChanged = true;
                             try { doc.ScheduleSolution(150); }
                             catch (Exception ex) { AddGhLog.Warn("SetNativeScript Schedule failed: " + ex.Message); }
                             try { Grasshopper.Instances.ActiveCanvas?.Refresh(); }
@@ -4992,11 +4075,9 @@ namespace Magpie
                 if (enabled.HasValue && obj is Grasshopper.Kernel.IGH_ActiveObject ao) ao.Locked = !enabled.Value;
 
                 obj.ExpireSolution(true);
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(150); }
                 catch (Exception ex) { AddGhLog.Warn("ExecuteSetGhComponentStatus Schedule failed: " + ex.Message); }
                 result = "状态更新成功。";
-                _canvasChanged = true;
             }));
             return result;
         }
@@ -5020,7 +4101,6 @@ namespace Magpie
                     affected++;
                 }
 
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(120); } catch (Exception ex) { AddGhLog.Debug("ExecuteSetAllCSharpScriptPreviews Schedule(120): " + ex.Message); }
                 try { doc.ScheduleSolution(360); } catch (Exception ex) { AddGhLog.Debug("ExecuteSetAllCSharpScriptPreviews Schedule(360): " + ex.Message); }
                 try { Grasshopper.Instances.ActiveCanvas?.Refresh(); } catch { }
@@ -5125,7 +4205,6 @@ namespace Magpie
                 _visualReviewPreviewComponentId = previewObj.InstanceGuid.ToString();
                 _visualReviewTargetSourceId = sourceId;
                 _visualReviewTargetOutputIndex = sourceOutputIndex;
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(120); } catch (Exception ex) { AddGhLog.Debug("ExecutePrepareVisualReviewPreview Schedule(120): " + ex.Message); }
                 try { doc.ScheduleSolution(360); } catch (Exception ex) { AddGhLog.Debug("ExecutePrepareVisualReviewPreview Schedule(360): " + ex.Message); }
                 try { Grasshopper.Instances.ActiveCanvas?.Refresh(); } catch { }
@@ -5249,7 +4328,6 @@ namespace Magpie
                 comp.Params.OnParametersChanged();
                 RefreshCSharpTypedAliasesAfterPortChange(obj, warnings);
                 obj.ExpireSolution(true);
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(150); }
                 catch (Exception ex) { AddGhLog.Warn("ExecuteModifyGhComponentPorts Schedule failed: " + ex.Message); }
                 if (warnings.Count > 0)
@@ -5309,7 +4387,6 @@ namespace Magpie
                         } else result = "Error: 找不到该组。";
                     }
                 }
-                _canvasChanged = true;
                 try { doc.ScheduleSolution(150); }
                 catch (Exception ex) { AddGhLog.Warn("ExecuteManageGhGroups Schedule failed: " + ex.Message); }
             }));
@@ -5385,7 +4462,6 @@ namespace Magpie
 
                 if (changed) {
                     RefreshPublicIdMap(doc);
-                    _canvasChanged = true;
                     try { doc.ScheduleSolution(150); }
                     catch (Exception ex) { AddGhLog.Warn("ExecuteManageGhGroupsUnified Schedule failed: " + ex.Message); }
                 }

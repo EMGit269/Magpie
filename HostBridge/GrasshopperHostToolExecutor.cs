@@ -1,15 +1,18 @@
 using System;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace Magpie.HostBridge
 {
     internal sealed class GrasshopperHostToolExecutor
     {
-        private readonly IGrasshopperHostBridgeBackend _backend;
+        private readonly GrasshopperDocumentQueryService _documentQueryService;
+        private readonly GrasshopperCanvasMutationService _canvasMutationService;
 
-        public GrasshopperHostToolExecutor(IGrasshopperHostBridgeBackend backend)
+        public GrasshopperHostToolExecutor(GrasshopperDocumentQueryService documentQueryService, GrasshopperCanvasMutationService canvasMutationService)
         {
-            _backend = backend ?? throw new ArgumentNullException(nameof(backend));
+            _documentQueryService = documentQueryService ?? throw new ArgumentNullException(nameof(documentQueryService));
+            _canvasMutationService = canvasMutationService ?? throw new ArgumentNullException(nameof(canvasMutationService));
         }
 
         public JObject BuildManifestPayload()
@@ -59,7 +62,7 @@ namespace Magpie.HostBridge
                 BuildHostToolDescriptor("connect_components", false, "Connect two existing Grasshopper component ports."),
                 BuildHostToolDescriptor("remove_component", false, "Remove one existing Grasshopper component."),
                 BuildHostToolDescriptor("set_component_value", false, "Set value/configuration on an existing helper component."),
-                BuildHostToolDescriptor("create_component_graph", false, "Create a batch of Grasshopper components and connections."),
+                BuildHostToolDescriptor("create_component_graph", false, "Create a batch of Grasshopper components and connections. Each component must have numeric 'x' and 'y' canvas coordinates, a 'name' (Grasshopper component name or alias), and optional 'label', 'value', and 'component_guid'. Example: {\"components\":[{\"name\":\"Circle\",\"x\":100,\"y\":100,\"label\":\"C\"}],\"connections\":[]}"),
                 BuildHostToolDescriptor("create_csharp_script", false, "Create a C# Script component with ports/body/helpers."),
                 BuildHostToolDescriptor("edit_csharp_script", false, "Edit an existing C# Script component body.")
             };
@@ -147,9 +150,9 @@ namespace Magpie.HostBridge
             switch ((tool ?? "").Trim())
             {
                 case "get_canvas_summary":
-                    return _backend.ExecuteGetCanvasSummary();
+                    return _documentQueryService.GetCanvasSummary();
                 case "query_components":
-                    return _backend.ExecuteQueryComponents(
+                    return _documentQueryService.QueryComponents(
                         args["id"]?.ToString(),
                         args["name_contains"]?.ToString(),
                         args["has_errors"]?.Value<bool?>(),
@@ -159,29 +162,29 @@ namespace Magpie.HostBridge
                         args["max_results"]?.Value<int?>() ?? 20,
                         args["neighbor_depth"]?.Value<int?>() ?? 0);
                 case "get_component_context":
-                    return _backend.ExecuteGetComponentContext(
-                        _backend.ResolveToolObjectId(args["id"]?.ToString()),
+                    return _documentQueryService.GetComponentContext(
+                        args["id"]?.ToString(),
                         args["depth"]?.Value<int?>() ?? 1,
                         args["include_script_bodies"]?.Value<bool?>() ?? false);
                 case "read_component_script":
-                    return _backend.ExecuteReadComponentScript(_backend.ResolveToolObjectId(args["id"]?.ToString()));
+                    return _documentQueryService.ReadComponentScript(args["id"]?.ToString());
                 case "check_gh_errors":
-                    return _backend.ExecuteCheckGhErrors();
+                    return _documentQueryService.CheckGhErrors();
                 case "recompute_canvas":
-                    return _backend.ExecuteRecomputeCanvas();
+                    return _canvasMutationService.RecomputeCanvas();
                 case "connect_components":
-                    return _backend.ExecuteConnectComponents(
-                        _backend.ResolveToolObjectId(args["from_id"]?.ToString()),
+                    return _canvasMutationService.ConnectComponents(
+                        args["from_id"]?.ToString(),
                         args["from_index"]?.Value<int?>() ?? 0,
-                        _backend.ResolveToolObjectId(args["to_id"]?.ToString()),
+                        args["to_id"]?.ToString(),
                         args["to_index"]?.Value<int?>() ?? 0,
                         args["from_port_label"]?.ToString(),
                         args["to_port_label"]?.ToString());
                 case "remove_component":
-                    return _backend.ExecuteRemoveComponent(_backend.ResolveToolObjectId(args["id"]?.ToString()));
+                    return _canvasMutationService.RemoveComponent(args["id"]?.ToString());
                 case "set_component_value":
-                    return _backend.ExecuteSetComponentValue(
-                        _backend.ResolveToolObjectId(args["id"]?.ToString()),
+                    return _canvasMutationService.SetComponentValue(
+                        args["id"]?.ToString(),
                         args["value"]?.ToString(),
                         args["min"]?.Value<double?>(),
                         args["max"]?.Value<double?>(),
@@ -189,25 +192,36 @@ namespace Magpie.HostBridge
                         args["property"]?.ToString(),
                         args["graph_mapper_type"]?.ToString());
                 case "create_component_graph":
-                    return _backend.ExecuteCreateComponentGraph(
-                        args["components"] as JArray ?? new JArray(),
-                        args["connections"] as JArray ?? new JArray(),
+                {
+                    var components = args["components"] as JArray;
+                    if (components != null)
+                    {
+                        foreach (var item in components.OfType<JObject>())
+                        {
+                            if (item["x"] == null) item["x"] = 0;
+                            if (item["y"] == null) item["y"] = 0;
+                        }
+                    }
+                    return _canvasMutationService.CreateComponentGraph(
+                        components,
+                        args["connections"] as JArray,
                         args["group_name"]?.ToString());
+                }
                 case "create_csharp_script":
-                    return _backend.ExecuteCreateCSharpScript(
+                    return _canvasMutationService.CreateCSharpScript(
                         args["alias_id"]?.ToString(),
                         args["name"]?.ToString() ?? args["label"]?.ToString(),
                         args["x"]?.Value<float?>() ?? 0f,
                         args["y"]?.Value<float?>() ?? 0f,
-                        args["inputs"] as JArray ?? new JArray(),
-                        args["outputs"] as JArray ?? new JArray(),
+                        args["inputs"] as JArray,
+                        args["outputs"] as JArray,
                         args["body"]?.ToString(),
-                        args["components"] as JArray ?? new JArray(),
-                        args["connections"] as JArray ?? new JArray(),
+                        args["components"] as JArray,
+                        args["connections"] as JArray,
                         args["group_name"]?.ToString());
                 case "edit_csharp_script":
-                    return _backend.ExecuteEditCSharpScript(
-                        _backend.ResolveToolObjectId(args["id"]?.ToString()),
+                    return _canvasMutationService.EditCSharpScript(
+                        args["id"]?.ToString(),
                         args["mode"]?.ToString() ?? "set_body",
                         args["body"]?.ToString());
                 default:

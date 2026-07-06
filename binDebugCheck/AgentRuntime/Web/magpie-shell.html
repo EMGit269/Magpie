@@ -1,0 +1,1524 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Magpie</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f5f0;
+      --panel: #fffefb;
+      --panel-soft: #f1eee7;
+      --line: #ded8cc;
+      --text: #1f1d19;
+      --muted: #777066;
+      --faint: #aaa297;
+      --accent: #20201d;
+      --accent-text: #fbf7ef;
+      --error: #8b352d;
+      --error-bg: #f8e7e3;
+      --overlay: rgba(24, 22, 18, 0.22);
+      --shadow: 0 18px 55px rgba(33, 27, 18, 0.12);
+      font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #141517;
+      --panel: #191b1f;
+      --panel-soft: #202328;
+      --line: #30333a;
+      --text: #f0ede7;
+      --muted: #9b948b;
+      --faint: #6f6a64;
+      --accent: #e6d3b8;
+      --accent-text: #171512;
+      --error: #ffd8d0;
+      --error-bg: #392120;
+      --overlay: rgba(0, 0, 0, 0.46);
+      --shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: 52px 1fr;
+      background: var(--bg);
+    }
+
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 254, 251, 0.78);
+      backdrop-filter: blur(16px);
+    }
+
+    :root[data-theme="dark"] .header {
+      background: rgba(25, 27, 31, 0.82);
+    }
+
+    .brand {
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .icon-btn,
+    .drawer-close,
+    .settings-close {
+      height: 32px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      transition: background .14s ease, color .14s ease, border-color .14s ease;
+    }
+
+    .icon-btn {
+      min-width: 32px;
+      padding: 0 9px;
+      font-size: 12px;
+    }
+
+    .icon-btn:hover,
+    .icon-btn.active,
+    .drawer-close:hover,
+    .settings-close:hover {
+      background: var(--panel-soft);
+      color: var(--text);
+      border-color: var(--line);
+    }
+
+    .main {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .messages {
+      height: 100%;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 28px 18px 176px;
+      scrollbar-width: thin;
+    }
+
+    .empty {
+      margin: auto 0;
+      padding: 0 16px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.58;
+    }
+
+    .empty strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+    }
+
+    .empty span {
+      display: block;
+      max-width: 310px;
+      margin: 0 auto;
+      font-size: 13px;
+    }
+
+    .bubble {
+      max-width: 88%;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.62;
+      font-size: 14px;
+    }
+
+    .bubble.user {
+      align-self: flex-end;
+      padding: 10px 13px;
+      border-radius: 18px;
+      background: var(--accent);
+      color: var(--accent-text);
+    }
+
+    .bubble.assistant {
+      align-self: flex-start;
+      color: var(--text);
+    }
+
+    .bubble.system {
+      align-self: center;
+      max-width: 92%;
+      color: var(--faint);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .bubble.pending {
+      align-self: flex-start;
+      color: var(--faint);
+      font-size: 13px;
+    }
+
+    .bubble.error {
+      align-self: flex-start;
+      padding: 10px 13px;
+      border-radius: 14px;
+      background: var(--error-bg);
+      color: var(--error);
+    }
+
+    .agent-block {
+      align-self: flex-start;
+      width: min(92%, 540px);
+      display: grid;
+      gap: 8px;
+    }
+
+    .agent-event {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+
+    .agent-event.plan,
+    .agent-event.warning {
+      background: var(--panel-soft);
+    }
+
+    .agent-event.tool_call {
+      border-style: dashed;
+    }
+
+    .agent-event.final {
+      border-color: rgba(201, 166, 107, 0.4);
+    }
+
+    .agent-event-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .agent-event-type {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .agent-event-status {
+      font-size: 11px;
+      color: var(--faint);
+    }
+
+    .agent-event-text {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.55;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      line-height: 1.4;
+    }
+
+    .badge-neutral { background: var(--panel-soft); color: var(--muted); border: 1px solid var(--line); }
+    .badge-running { background: rgba(201, 166, 107, 0.18); color: #a0782a; border: 1px solid rgba(201, 166, 107, 0.35); }
+    .badge-completed { background: rgba(80, 160, 100, 0.14); color: #3a8a52; border: 1px solid rgba(80, 160, 100, 0.3); }
+    .badge-failed { background: var(--error-bg); color: var(--error); border: 1px solid rgba(139, 53, 45, 0.25); }
+    .badge-warning { background: rgba(201, 166, 107, 0.22); color: #8a6a2a; border: 1px solid rgba(201, 166, 107, 0.4); }
+    .badge-created { background: rgba(90, 130, 180, 0.14); color: #4a6fa5; border: 1px solid rgba(90, 130, 180, 0.3); }
+
+    :root[data-theme="dark"] .badge-running { color: #e6c878; }
+    :root[data-theme="dark"] .badge-completed { color: #7dd793; }
+    :root[data-theme="dark"] .badge-warning { color: #e6c878; }
+    :root[data-theme="dark"] .badge-created { color: #8ab4f8; }
+
+    .agent-event-details {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .agent-event-details summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 7px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--panel-soft);
+      user-select: none;
+    }
+
+    .agent-event-details summary::-webkit-details-marker { display: none; }
+
+    .agent-event-details[open] summary { border-bottom: 1px solid var(--line); }
+
+    .agent-event-json {
+      margin: 0;
+      padding: 10px;
+      max-height: 260px;
+      overflow: auto;
+      background: var(--panel-soft);
+      color: var(--text);
+      font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .bubble.assistant.streaming {
+      border-left: 2px solid var(--accent);
+      padding-left: 10px;
+    }
+
+    .composer {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 14px;
+      z-index: 4;
+    }
+
+    .composer-shell {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 10px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255, 254, 251, 0.86);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    :root[data-theme="dark"] .composer-shell {
+      background: rgba(25, 27, 31, 0.88);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 76px;
+      max-height: 190px;
+      resize: none;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    textarea::placeholder {
+      color: var(--faint);
+    }
+
+    .attachment-tray {
+      display: none;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .attachment-tray.visible {
+      display: flex;
+    }
+
+    .attachment-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 30px;
+      max-width: 100%;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-soft);
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .attachment-chip-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .attachment-chip-remove {
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .attachment-chip-remove:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--text);
+    }
+
+    .composer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .composer-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .hint {
+      color: var(--faint);
+      font-size: 11px;
+    }
+
+    .upload {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .upload:hover {
+      color: var(--text);
+      background: var(--panel-soft);
+    }
+
+    .send-group {
+      display: flex;
+      align-items: center;
+    }
+
+    .send {
+      position: relative;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 0;
+    }
+
+    .send {
+      background: var(--accent);
+      color: var(--accent-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .send::before,
+    .send::after {
+      content: "";
+      position: absolute;
+      transition: opacity .14s ease, transform .14s ease;
+    }
+
+    .send::before {
+      width: 12px;
+      height: 12px;
+      border-top: 2px solid currentColor;
+      border-right: 2px solid currentColor;
+      transform: translate(-1px, 0) rotate(45deg);
+      transform-origin: center;
+    }
+
+    .send::after {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      background: currentColor;
+      opacity: 0;
+      transform: scale(0.72);
+    }
+
+    .send.sending::before {
+      opacity: 0;
+      transform: translate(-1px, 0) rotate(45deg) scale(0.72);
+    }
+
+    .send.sending::after {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .drawer {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      bottom: 12px;
+      width: min(330px, calc(100% - 24px));
+      display: none;
+      grid-template-rows: auto auto 1fr;
+      overflow: hidden;
+      z-index: 6;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .drawer.visible {
+      display: grid;
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 14px 10px;
+    }
+
+    .drawer-header h3,
+    .settings-panel h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .history-count {
+      padding: 0 14px 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .history-list {
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 0 12px 12px;
+    }
+
+    .history-item {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: transparent;
+      color: var(--text);
+      padding: 12px;
+      text-align: left;
+    }
+
+    .history-item strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .history-item span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .settings-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      z-index: 7;
+      padding: 64px 14px 14px;
+      background: var(--overlay);
+    }
+
+    .settings-overlay.visible {
+      display: block;
+    }
+
+    .settings-panel {
+      width: min(340px, 100%);
+      max-height: 100%;
+      margin-left: auto;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .settings-copy {
+      margin: 7px 0 2px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .settings-row {
+      margin-top: 13px;
+    }
+
+    .settings-row label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .settings-row input,
+    .settings-row select,
+    .settings-pill {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      color: var(--text);
+      padding: 8px 10px;
+      outline: none;
+    }
+
+    .settings-inline {
+      display: flex !important;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px !important;
+    }
+
+    .settings-inline input {
+      width: auto;
+      min-height: 0;
+      margin: 0;
+    }
+
+    .settings-save,
+    .settings-close {
+      width: 100%;
+      height: 38px;
+      border-radius: 12px;
+    }
+
+    .settings-save {
+      border: 1px solid transparent;
+      background: var(--accent);
+      color: var(--accent-text);
+      font-weight: 650;
+    }
+
+    .settings-status {
+      min-height: 18px;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .settings-section {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.03);
+      margin-top: 14px;
+    }
+
+    .settings-section:first-of-type {
+      margin-top: 8px;
+    }
+
+    .settings-section h4 {
+      margin: 0 0 4px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .settings-section-copy {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .settings-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .settings-key-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .settings-key-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 12px;
+      background: rgba(255,255,255,0.04);
+      white-space: nowrap;
+    }
+
+    .settings-key-badge.saved {
+      border-color: rgba(201, 166, 107, 0.35);
+      background: rgba(201, 166, 107, 0.12);
+      color: var(--accent);
+    }
+
+    .settings-advanced {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .settings-advanced summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 14px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .settings-advanced summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .settings-advanced-body {
+      padding: 0 14px 14px;
+      border-top: 1px solid var(--line);
+    }
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">Magpie</div>
+      <nav class="toolbar" aria-label="Window actions">
+        <button id="toggle-history" class="icon-btn" title="History" aria-label="History">☰</button>
+        <button id="new-chat" class="icon-btn" title="New chat" aria-label="New chat">+</button>
+        <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+      </nav>
+    </header>
+
+    <main class="main">
+      <section id="messages" class="messages">
+        <div id="empty-state" class="empty">
+          <strong>Ask Magpie</strong>
+          <span>Describe a Grasshopper task, inspect the current canvas, or ask for the next modeling step.</span>
+        </div>
+      </section>
+
+      <section class="composer" aria-label="Message composer">
+        <div class="composer-shell">
+          <div id="attachment-tray" class="attachment-tray" aria-live="polite"></div>
+          <textarea id="input" placeholder="Message Magpie..."></textarea>
+          <div class="composer-actions">
+            <div class="composer-tools">
+              <button id="upload" class="upload" title="Upload files" aria-label="Upload files">+</button>
+              <input id="file-input" type="file" accept=".txt,.md,.json,.csv,.tsv,.log,.py,.cs,.js,.ts,.tsx,.jsx,.html,.css,.xml,.yml,.yaml,.ini,.toml,.sql,.bat,.ps1,.sh,image/*" multiple hidden />
+              <div class="hint">Ctrl + Enter to send</div>
+            </div>
+            <div class="send-group">
+              <button id="send" class="send" title="Send message" aria-label="Send message"></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside id="history-sidebar" class="drawer" aria-label="Conversation history">
+        <div class="drawer-header">
+          <h3>History</h3>
+          <button id="close-history" class="drawer-close">Close</button>
+        </div>
+        <div id="history-count" class="history-count">0 sessions</div>
+        <div id="history-list" class="history-list"></div>
+      </aside>
+
+      <div id="settings-overlay" class="settings-overlay">
+        <div class="settings-panel">
+          <h3>Settings</h3>
+          <p class="settings-copy">Configure the model endpoint used by Magpie. API keys stay saved locally on this device until you replace or clear them.</p>
+
+          <div class="settings-row">
+            <label for="theme-mode">Theme</label>
+            <select id="theme-mode">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+
+          <section class="settings-section">
+            <h4>Model</h4>
+            <p class="settings-section-copy">Choose a provider, then set endpoint, model name, and key.</p>
+            <div class="settings-grid">
+              <div class="settings-row">
+                <label for="model-provider">Provider</label>
+                <select id="model-provider">
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="qwen">Qwen</option>
+                </select>
+              </div>
+
+              <div class="settings-row">
+                <label for="model-base-url">Base URL</label>
+                <input id="model-base-url" autocomplete="off" spellcheck="false" />
+              </div>
+
+              <div class="settings-row">
+                <label for="model-name">Model</label>
+                <input id="model-name" autocomplete="off" spellcheck="false" />
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-key-row">
+                  <label for="model-api-key">API Key</label>
+                  <div id="model-key-badge" class="settings-key-badge">No saved key</div>
+                </div>
+                <input id="model-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Enter a new key to save or replace" />
+                <div id="model-key-state" class="settings-status"></div>
+              </div>
+
+              <div class="settings-row">
+                <label class="settings-inline">
+                  <input id="model-clear-key" type="checkbox" />
+                  Remove the saved key for this provider
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <details class="settings-advanced">
+            <summary>Advanced Runtime</summary>
+            <div class="settings-advanced-body">
+              <div class="settings-row">
+                <label>Runtime URL</label>
+                <input id="agent-service-url" autocomplete="off" spellcheck="false" />
+              </div>
+
+              <div class="settings-row">
+                <label for="agent-service-command">Start Command</label>
+                <input id="agent-service-command" autocomplete="off" spellcheck="false" placeholder="python -m uvicorn app.main:app --host 127.0.0.1 --port 8000" />
+              </div>
+
+              <div class="settings-row">
+                <label for="agent-service-workdir">Working Directory</label>
+                <input id="agent-service-workdir" autocomplete="off" spellcheck="false" placeholder="C:\path\to\agent_service" />
+              </div>
+
+              <div class="settings-row">
+                <label for="agent-invoke-path">Invoke Path</label>
+                <input id="agent-invoke-path" autocomplete="off" spellcheck="false" placeholder="Leave empty for auto routing" />
+              </div>
+
+              <div class="settings-row">
+                <label>Diagnostics</label>
+                <div id="runtime-diagnostics" class="settings-pill"></div>
+              </div>
+            </div>
+          </details>
+
+          <div class="settings-row">
+            <button id="save-model-settings" class="settings-save">Save Settings</button>
+          </div>
+
+          <div class="settings-row">
+            <button id="close-settings" class="settings-close">Done</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    const state = {
+      sending: false,
+      serviceUrl: '',
+      serviceReady: false,
+      hostBridgeReady: false,
+      serviceStatusText: '',
+      historyVisible: false,
+      settingsVisible: false,
+      themeMode: 'system',
+      modelSettings: null,
+      watchdog: null,
+      ackTimer: null,
+      acked: false,
+      attachments: [],
+      currentAgentBlock: null,
+      currentMessageBubble: null
+    };
+
+    const messages = document.getElementById('messages');
+    const emptyState = document.getElementById('empty-state');
+    const attachmentTray = document.getElementById('attachment-tray');
+    const input = document.getElementById('input');
+    const send = document.getElementById('send');
+    const upload = document.getElementById('upload');
+    const fileInput = document.getElementById('file-input');
+    const agentServiceUrl = document.getElementById('agent-service-url');
+    const agentServiceCommand = document.getElementById('agent-service-command');
+    const agentServiceWorkdir = document.getElementById('agent-service-workdir');
+    const agentInvokePath = document.getElementById('agent-invoke-path');
+    const runtimeDiagnostics = document.getElementById('runtime-diagnostics');
+    const historyList = document.getElementById('history-list');
+    const historyCount = document.getElementById('history-count');
+    const historySidebar = document.getElementById('history-sidebar');
+    const settingsOverlay = document.getElementById('settings-overlay');
+    const themeMode = document.getElementById('theme-mode');
+    const modelProvider = document.getElementById('model-provider');
+    const modelBaseUrl = document.getElementById('model-base-url');
+    const modelName = document.getElementById('model-name');
+    const modelApiKey = document.getElementById('model-api-key');
+    const modelClearKey = document.getElementById('model-clear-key');
+    const modelKeyState = document.getElementById('model-key-state');
+    const modelKeyBadge = document.getElementById('model-key-badge');
+    const toggleHistory = document.getElementById('toggle-history');
+    const settingsBtn = document.getElementById('settings-btn');
+
+    function post(type, payload) {
+      if (!window.chrome?.webview) {
+        removePendingBubble();
+        appendBubble('error', 'WebView bridge is unavailable. Reload Magpie inside Grasshopper.');
+        setSending(false);
+        return false;
+      }
+      window.chrome.webview.postMessage({ type, payload: payload || {} });
+      return true;
+    }
+
+    function updateEmptyState() {
+      emptyState.style.display = messages.querySelector('.bubble, .agent-block') ? 'none' : 'block';
+    }
+
+    function appendBubble(kind, text) {
+      const node = document.createElement('div');
+      node.className = `bubble ${kind}`;
+      node.textContent = text || '';
+      messages.appendChild(node);
+      messages.scrollTop = messages.scrollHeight;
+      updateEmptyState();
+    }
+
+    function formatBytes(size) {
+      if (!Number.isFinite(size) || size <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let value = size;
+      let unitIndex = 0;
+      while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+      }
+      return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
+    }
+
+    function attachmentSummary(attachment) {
+      const kind = attachment.kind === 'image' ? 'image' : 'text';
+      return `${attachment.name} (${kind}, ${formatBytes(attachment.size)})`;
+    }
+
+    function renderAttachments() {
+      attachmentTray.innerHTML = '';
+      attachmentTray.classList.toggle('visible', state.attachments.length > 0);
+      state.attachments.forEach(attachment => {
+        const chip = document.createElement('div');
+        chip.className = 'attachment-chip';
+        chip.innerHTML = `<span class="attachment-chip-label">${attachmentSummary(attachment)}</span><button class="attachment-chip-remove" type="button" aria-label="Remove attachment">x</button>`;
+        chip.querySelector('.attachment-chip-remove').addEventListener('click', () => {
+          state.attachments = state.attachments.filter(item => item.id !== attachment.id);
+          renderAttachments();
+        });
+        attachmentTray.appendChild(chip);
+      });
+    }
+
+    function clearAttachments() {
+      state.attachments = [];
+      fileInput.value = '';
+      renderAttachments();
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error(`Failed to read ${file.name}.`));
+        reader.onload = () => resolve(reader.result || '');
+        reader.readAsText(file);
+      });
+    }
+
+    async function fileToAttachment(file) {
+      const id = `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`;
+      const isImage = (file.type || '').startsWith('image/');
+      if (isImage) {
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(`${file.name} is larger than 5 MB.`);
+        }
+        return {
+          id,
+          name: file.name,
+          kind: 'image',
+          mimeType: file.type || 'image/*',
+          size: file.size
+        };
+      }
+
+      if (file.size > 300 * 1024) {
+        throw new Error(`${file.name} is larger than 300 KB.`);
+      }
+
+      return {
+        id,
+        name: file.name,
+        kind: 'text',
+        mimeType: file.type || 'text/plain',
+        size: file.size,
+        textContent: await readFileAsText(file)
+      };
+    }
+
+    async function handleFiles(fileList) {
+      const files = Array.from(fileList || []);
+      if (!files.length) return;
+
+      const nextAttachments = [];
+      for (const file of files) {
+        try {
+          nextAttachments.push(await fileToAttachment(file));
+        } catch (error) {
+          appendBubble('error', error.message || `Failed to load ${file.name}.`);
+        }
+      }
+
+      if (!nextAttachments.length) return;
+      state.attachments = [...state.attachments, ...nextAttachments];
+      renderAttachments();
+    }
+
+    function appendAgentResponse(payload) {
+      const events = Array.isArray(payload.events) ? payload.events : [];
+      if (!events.length && payload.finalText) {
+        appendBubble('assistant', payload.finalText);
+        return;
+      }
+      const block = document.createElement('div');
+      block.className = 'agent-block';
+      events.forEach(event => {
+        block.appendChild(renderEventCard(event));
+      });
+      messages.appendChild(block);
+      messages.scrollTop = messages.scrollHeight;
+      updateEmptyState();
+    }
+
+    function formatEventType(type, tool) {
+      switch (type) {
+        case 'plan': return 'Plan';
+        case 'task': return 'Task';
+        case 'tool_call': return tool ? `Tool · ${tool}` : 'Tool';
+        case 'tool_result': return tool ? `Result · ${tool}` : 'Result';
+        case 'warning': return 'Warning';
+        case 'final': return 'Answer';
+        case 'message': return 'Agent';
+        default: return type || 'Agent';
+      }
+    }
+
+    function formatStatusBadge(status) {
+      const s = (status || '').toString().toLowerCase();
+      if (s === 'running') return 'badge-running';
+      if (['completed', 'ok', 'done'].includes(s)) return 'badge-completed';
+      if (['failed', 'error'].includes(s)) return 'badge-failed';
+      if (['degraded', 'needs_attention', 'blocked', 'warning'].includes(s)) return 'badge-warning';
+      if (['created', 'todo'].includes(s)) return 'badge-created';
+      return 'badge-neutral';
+    }
+
+    function renderEventCard(event) {
+      const node = document.createElement('div');
+      const type = event.type || 'message';
+      node.className = `agent-event ${type}`;
+      const label = formatEventType(type, event.tool || '');
+      const status = event.status || '';
+      const detailsJson = JSON.stringify(event.data || {}, null, 2);
+      node.innerHTML = `<div class="agent-event-head"><span class="agent-event-type">${label}</span><span class="agent-event-status badge ${formatStatusBadge(status)}">${status}</span></div><div class="agent-event-text"></div><details class="agent-event-details"><summary>Details</summary><pre class="agent-event-json"></pre></details>`;
+      node.querySelector('.agent-event-text').textContent = event.text || '';
+      node.querySelector('.agent-event-json').textContent = detailsJson;
+      return node;
+    }
+
+    function startAgentBlock() {
+      const block = document.createElement('div');
+      block.className = 'agent-block';
+      messages.appendChild(block);
+      state.currentAgentBlock = block;
+      updateEmptyState();
+      return block;
+    }
+
+    function appendAssistantDelta(delta) {
+      if (!state.currentMessageBubble) {
+        const node = document.createElement('div');
+        node.className = 'bubble assistant streaming';
+        messages.appendChild(node);
+        state.currentMessageBubble = node;
+        updateEmptyState();
+      }
+      state.currentMessageBubble.textContent += delta;
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function appendAgentEvent(event) {
+      if (!event || !event.type) return;
+      if (event.type === 'assistant_delta') {
+        appendAssistantDelta(event.text || '');
+        resetWatchdog();
+        return;
+      }
+      if (event.type === 'final') {
+        if (state.currentMessageBubble) {
+          state.currentMessageBubble.textContent = event.text || '';
+          state.currentMessageBubble.classList.remove('streaming');
+        } else {
+          appendBubble('assistant', event.text || '');
+        }
+        state.currentAgentBlock = null;
+        state.currentMessageBubble = null;
+        messages.scrollTop = messages.scrollHeight;
+        resetWatchdog();
+        return;
+      }
+      let block = state.currentAgentBlock;
+      if (!block) {
+        block = startAgentBlock();
+      }
+      if (event.type === 'tool_result') {
+        const tool = event.tool || '';
+        const existing = Array.from(block.querySelectorAll('.agent-event.tool_call')).find(node => {
+          const head = node.querySelector('.agent-event-type');
+          return head && head.textContent.includes(tool);
+        });
+        if (existing) {
+          existing.className = 'agent-event tool_result';
+          existing.querySelector('.agent-event-type').textContent = formatEventType('tool_result', tool);
+          const statusEl = existing.querySelector('.agent-event-status');
+          statusEl.className = `agent-event-status badge ${formatStatusBadge(event.status)}`;
+          statusEl.textContent = event.status || '';
+          existing.querySelector('.agent-event-text').textContent = event.text || '';
+          existing.querySelector('.agent-event-json').textContent = JSON.stringify(event.data || {}, null, 2);
+          messages.scrollTop = messages.scrollHeight;
+          resetWatchdog();
+          return;
+        }
+      }
+      block.appendChild(renderEventCard(event));
+      messages.scrollTop = messages.scrollHeight;
+      resetWatchdog();
+    }
+
+    function resetWatchdog() {
+      if (state.watchdog) {
+        clearTimeout(state.watchdog);
+        state.watchdog = null;
+      }
+      if (!state.sending) return;
+      state.watchdog = setTimeout(() => {
+        if (!state.sending) return;
+        removePendingBubble();
+        appendBubble('error', state.acked
+          ? 'Runtime response was not delivered back into the WebView. Reopen Magpie and check the local Magpie log.'
+          : 'C# bridge did not acknowledge the message. Reload the latest Magpie.gha and reopen the Magpie window.');
+        setSending(false);
+      }, 90000);
+    }
+
+    function removePendingBubble() {
+      messages.querySelectorAll('.bubble.pending').forEach(node => node.remove());
+      updateEmptyState();
+    }
+
+    function clearConversation() {
+      messages.querySelectorAll('.bubble').forEach(node => node.remove());
+      messages.querySelectorAll('.agent-block').forEach(node => node.remove());
+      input.value = '';
+      clearAttachments();
+      state.currentAgentBlock = null;
+      state.currentMessageBubble = null;
+      updateEmptyState();
+      if (state.historyVisible) post('history_open');
+    }
+
+    function setSending(sendingState) {
+      state.sending = sendingState;
+      send.classList.toggle('sending', sendingState);
+      send.title = sendingState ? 'Stop generation' : 'Send message';
+      send.setAttribute('aria-label', sendingState ? 'Stop generation' : 'Send message');
+      upload.disabled = sendingState;
+      toggleHistory.disabled = sendingState;
+      settingsBtn.disabled = sendingState;
+      if (!sendingState && state.watchdog) {
+        clearTimeout(state.watchdog);
+        state.watchdog = null;
+      }
+      if (!sendingState && state.ackTimer) {
+        clearTimeout(state.ackTimer);
+        state.ackTimer = null;
+      }
+    }
+
+    function sendMessage() {
+      if (state.sending) {
+        post('stop_generation');
+        return;
+      }
+      const text = input.value.trim();
+      const attachmentsToSend = state.attachments.map(attachment => (
+        attachment.kind === 'text'
+          ? {
+              id: attachment.id,
+              name: attachment.name,
+              kind: attachment.kind,
+              mimeType: attachment.mimeType,
+              size: attachment.size,
+              textContent: attachment.textContent
+            }
+          : {
+              id: attachment.id,
+              name: attachment.name,
+              kind: attachment.kind,
+              mimeType: attachment.mimeType,
+              size: attachment.size
+            }
+      ));
+      if (!text && !attachmentsToSend.length) return;
+      input.value = '';
+      clearAttachments();
+      state.currentAgentBlock = null;
+      state.currentMessageBubble = null;
+      const attachmentText = attachmentsToSend.length
+        ? attachmentsToSend.map(item => `[Attachment] ${attachmentSummary(item)}`).join('\n')
+        : '';
+      appendBubble('user', [text, attachmentText].filter(Boolean).join('\n'));
+      appendBubble('pending', state.serviceReady
+        ? (state.hostBridgeReady ? 'Working...' : '通讯中...')
+        : 'Checking agent service...');
+      setSending(true);
+      state.acked = false;
+      state.ackTimer = setTimeout(() => {
+        if (!state.sending || state.acked) return;
+        removePendingBubble();
+        appendBubble('error', 'C# bridge did not acknowledge the message. Reload the latest Magpie.gha and reopen the Magpie window.');
+        setSending(false);
+      }, 2500);
+      resetWatchdog();
+      post('send_message', { text, attachments: attachmentsToSend });
+    }
+
+    function setHistoryVisible(visible) {
+      state.historyVisible = visible;
+      historySidebar.classList.toggle('visible', visible);
+      toggleHistory.classList.toggle('active', visible);
+      if (visible) post('history_open');
+    }
+
+    function setSettingsVisible(visible) {
+      state.settingsVisible = visible;
+      settingsOverlay.classList.toggle('visible', visible);
+      settingsBtn.classList.toggle('active', visible);
+    }
+
+    function applyTheme(mode) {
+      state.themeMode = mode || 'system';
+      if (state.themeMode === 'system') {
+        document.documentElement.dataset.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      } else {
+        document.documentElement.dataset.theme = state.themeMode;
+      }
+      themeMode.value = state.themeMode;
+    }
+
+    function renderHistory(items) {
+      historyList.innerHTML = '';
+      const list = Array.isArray(items) ? items : [];
+      historyCount.textContent = `${list.length} sessions`;
+      list.forEach(item => {
+        const card = document.createElement('button');
+        card.className = 'history-item';
+        card.innerHTML = `<strong>${item.title || 'Session'}</strong><span>${item.subtitle || ''}</span>`;
+        card.addEventListener('click', () => setHistoryVisible(false));
+        historyList.appendChild(card);
+      });
+    }
+
+    function providerById(providerId) {
+      const settings = state.modelSettings || {};
+      const providers = Array.isArray(settings.providers) ? settings.providers : [];
+      return providers.find(provider => provider.id === providerId) || providers[0] || null;
+    }
+
+    function renderModelSettings(settings) {
+      state.modelSettings = settings || { currentProvider: 'deepseek', providers: [] };
+      const provider = providerById(state.modelSettings.currentProvider) || providerById('deepseek');
+      if (!provider) return;
+
+      modelProvider.value = provider.id;
+      modelBaseUrl.value = provider.baseUrl || provider.defaultBaseUrl || '';
+      modelName.value = provider.modelName || provider.defaultModel || '';
+      modelApiKey.value = '';
+      modelClearKey.checked = false;
+      const service = state.modelSettings.service || {};
+      agentServiceUrl.value = service.serviceUrl || state.serviceUrl || 'http://127.0.0.1:8000';
+      agentServiceCommand.value = service.startCommand || '';
+      agentServiceWorkdir.value = service.workingDirectory || '';
+      agentInvokePath.value = service.invokePath || '';
+      updateKeyPresentation(provider);
+    }
+
+    function switchProvider(providerId) {
+      if (!state.modelSettings) return;
+      state.modelSettings.currentProvider = providerId;
+      const provider = providerById(providerId);
+      if (!provider) return;
+      modelBaseUrl.value = provider.baseUrl || provider.defaultBaseUrl || '';
+      modelName.value = provider.modelName || provider.defaultModel || '';
+      modelApiKey.value = '';
+      modelClearKey.checked = false;
+      updateKeyPresentation(provider);
+    }
+
+    function updateKeyPresentation(provider) {
+      const hasSavedKey = !!provider?.apiKeyConfigured;
+      modelKeyBadge.textContent = hasSavedKey ? 'Saved locally' : 'No saved key';
+      modelKeyBadge.classList.toggle('saved', hasSavedKey);
+      modelApiKey.placeholder = hasSavedKey
+        ? 'Saved locally. Enter a new key only if you want to replace it'
+        : 'Enter API key';
+      modelKeyState.textContent = hasSavedKey
+        ? 'The current key is already stored on this device. Leaving this field blank keeps it unchanged.'
+        : 'No key is stored for this provider yet.';
+    }
+
+    document.getElementById('new-chat').addEventListener('click', clearConversation);
+    document.getElementById('close-history').addEventListener('click', () => setHistoryVisible(false));
+    toggleHistory.addEventListener('click', () => setHistoryVisible(!state.historyVisible));
+    settingsBtn.addEventListener('click', () => setSettingsVisible(!state.settingsVisible));
+    send.addEventListener('click', sendMessage);
+    upload.addEventListener('click', () => {
+      if (!state.sending) fileInput.click();
+    });
+    fileInput.addEventListener('change', event => handleFiles(event.target.files));
+    settingsOverlay.addEventListener('click', event => {
+      if (event.target === settingsOverlay) setSettingsVisible(false);
+    });
+    document.getElementById('close-settings').addEventListener('click', () => setSettingsVisible(false));
+    themeMode.addEventListener('change', () => {
+      applyTheme(themeMode.value);
+      post('theme_changed', { mode: themeMode.value });
+    });
+    modelProvider.addEventListener('change', () => switchProvider(modelProvider.value));
+    modelClearKey.addEventListener('change', () => {
+      const provider = providerById(modelProvider.value);
+      if (modelClearKey.checked) {
+        modelApiKey.value = '';
+        modelKeyState.textContent = 'Saving now will remove the currently saved key.';
+        return;
+      }
+      updateKeyPresentation(provider);
+    });
+    modelApiKey.addEventListener('input', () => {
+      if (modelApiKey.value.trim()) {
+        modelClearKey.checked = false;
+        modelKeyState.textContent = 'Saving now will replace the saved key for this provider.';
+      } else {
+        updateKeyPresentation(providerById(modelProvider.value));
+      }
+    });
+    document.getElementById('save-model-settings').addEventListener('click', () => {
+      modelKeyState.textContent = modelClearKey.checked ? 'Removing saved key...' : 'Saving settings...';
+      post('save_model_settings', {
+        providerId: modelProvider.value,
+        baseUrl: modelBaseUrl.value,
+          modelName: modelName.value,
+          apiKey: modelApiKey.value,
+          clearApiKey: modelClearKey.checked,
+          service: {
+            serviceUrl: agentServiceUrl.value,
+            startCommand: agentServiceCommand.value,
+            workingDirectory: agentServiceWorkdir.value,
+            invokePath: agentInvokePath.value
+          }
+        });
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && event.ctrlKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
+    window.chrome?.webview?.addEventListener('message', event => {
+      const message = event.data || {};
+      const payload = message.payload || {};
+      switch (message.type) {
+        case 'init':
+          state.serviceUrl = payload.serviceUrl || '';
+          if (payload.diagnostics) {
+            const build = payload.diagnostics.buildId || 'unknown';
+            const path = payload.diagnostics.entryPath || 'unknown path';
+            runtimeDiagnostics.textContent = `${build} · ${path}`;
+          }
+          applyTheme(payload.themeMode || 'system');
+          renderHistory(payload.historyItems || []);
+          renderModelSettings(payload.modelSettings);
+          break;
+        case 'status':
+          if (payload.serviceUrl && !agentServiceUrl.value) agentServiceUrl.value = payload.serviceUrl;
+          state.serviceReady = !!payload.isReady;
+          state.hostBridgeReady = !!payload.hostBridgeReady;
+          state.serviceStatusText = payload.text || '';
+          break;
+        case 'agent_ack':
+          state.acked = true;
+          if (state.ackTimer) {
+            clearTimeout(state.ackTimer);
+            state.ackTimer = null;
+          }
+          {
+            const pending = messages.querySelector('.bubble.pending');
+            if (pending) {
+              pending.textContent = payload.text || (
+                state.serviceReady
+                  ? (state.hostBridgeReady ? 'Working...' : '通讯中...')
+                  : 'Checking agent service...'
+              );
+            }
+          }
+          resetWatchdog();
+          break;
+        case 'agent_event':
+          removePendingBubble();
+          appendAgentEvent(payload);
+          break;
+        case 'assistant_message':
+          removePendingBubble();
+          appendBubble('assistant', payload.text || '');
+          break;
+        case 'assistant_response':
+          removePendingBubble();
+          appendAgentResponse(payload);
+          break;
+        case 'error_message':
+          removePendingBubble();
+          appendBubble('error', payload.text || 'Unknown error.');
+          break;
+        case 'system_message':
+          removePendingBubble();
+          appendBubble('system', payload.text || '');
+          break;
+        case 'generation_state':
+          if (payload.isGenerating && payload.status) {
+            const pending = messages.querySelector('.bubble.pending');
+            if (pending) pending.textContent = payload.status;
+          }
+          if (!payload.isGenerating) removePendingBubble();
+          setSending(!!payload.isGenerating);
+          break;
+        case 'theme_state':
+          applyTheme(payload.mode || 'system');
+          break;
+        case 'history_items':
+          renderHistory(payload.items || []);
+          break;
+        case 'model_settings':
+          renderModelSettings(payload);
+          break;
+        case 'model_settings_saved':
+          renderModelSettings(payload);
+          {
+            const provider = providerById(payload.currentProvider);
+            modelKeyState.textContent = provider?.apiKeyConfigured
+              ? 'Saved. The API key is stored locally on this device.'
+              : 'Saved. No API key is stored for this provider.';
+          }
+          break;
+      }
+    });
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+      if (state.themeMode === 'system') applyTheme('system');
+    });
+
+    updateEmptyState();
+    renderAttachments();
+    setHistoryVisible(false);
+    setSettingsVisible(false);
+    post('ready');
+  </script>
+</body>
+</html>
