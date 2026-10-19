@@ -76,6 +76,8 @@ python3 MacBridge/tests/run_smoke.py --rhino rhinocode_remotepipe_实际PID
 
 最快方式：点击 Grasshopper 顶部菜单 **Magpie → 打开 Agent**，无需放置组件。
 也可双击画布搜索 **Magpie Agent** 并放置，或在 `Magpie → Agent` 分类找到该组件；双击组件打开聊天窗口。
+聊天窗口默认浮动置顶，点击 Grasshopper 画布时仍保持可见；再次打开会恢复已有窗口及对话。
+同一个 Rhino 进程中重复加载 Bridge 时复用已运行的实例，避免重复监听 8765 端口。
 输入自然语言任务后点击发送，或按 `⌘ + Enter`；生成过程中再次点击发送按钮可停止。
 窗口支持流式回复、工具结果、会话历史、新建、重命名和删除会话，以及主题切换。
 关闭聊天窗口会取消当前生成，Bridge 和共享的 Agent 服务继续运行。

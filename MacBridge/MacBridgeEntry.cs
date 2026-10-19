@@ -26,16 +26,15 @@ namespace Magpie.MacBridge
 
     public static class Bridge
     {
-        private static readonly object Gate = new object();
+        private static readonly object Gate = MacProcessState.Gate;
         private static GrasshopperHostBridgeRuntime _runtime;
         public static int Port { get; private set; } = 8765;
-        public static bool IsRunning => _runtime?.IsRunning == true;
+        public static bool IsRunning => MacProcessState.BridgeIsRunning(Port);
 
         public static void Start()
         {
             lock (Gate)
             {
-                if (IsRunning) return;
                 var setting = Environment.GetEnvironmentVariable("MAGPIE_HOST_BRIDGE_PORT");
                 if (!string.IsNullOrEmpty(setting))
                 {
@@ -43,13 +42,14 @@ namespace Magpie.MacBridge
                         throw new InvalidOperationException("MAGPIE_HOST_BRIDGE_PORT must be between 1 and 65535.");
                     Port = port;
                 }
+                if (IsRunning) { MacAgentMenu.Start(); return; }
                 var backend = new MacDocumentBackend();
                 var executor = new GrasshopperHostToolExecutor(
                     new GrasshopperDocumentQueryService(backend),
                     new GrasshopperCanvasMutationService(backend), MacDocumentBackend.Tools, backend.SearchComponentCatalog);
                 _runtime = new GrasshopperHostBridgeRuntime(executor, Port, request => OnUiThread(executor, request));
                 _runtime.EnsureServer();
-                if (!IsRunning)
+                if (_runtime?.IsRunning != true)
                     throw new InvalidOperationException($"Could not start Magpie bridge on port {Port}. See ~/Library/Logs/Magpie/bridge.log.");
                 MacAgentMenu.Start();
                 AddGhLog.Info($"Mac bridge ready at http://127.0.0.1:{Port}");

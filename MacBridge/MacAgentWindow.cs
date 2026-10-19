@@ -44,8 +44,14 @@ namespace Magpie.MacBridge
                 try
                 {
                     Bridge.Start();
-                    if (_current == null) _current = new MacAgentWindow();
-                    _current.Show(); _current.BringToFront();
+                    var window = MacProcessState.FindWindow();
+                    if (window == null)
+                    {
+                        _current = new MacAgentWindow();
+                        MacProcessState.RegisterWindow(_current);
+                        window = _current;
+                    }
+                    MacProcessState.FloatWindow(window);
                 }
                 catch (Exception error) { MessageBox.Show("Could not open Magpie: " + error.Message, "Magpie"); }
             }));
@@ -56,6 +62,9 @@ namespace Magpie.MacBridge
             _service = new MacAgentService(MacAgentSettings.Load());
             Title = "Magpie Agent"; ClientSize = new Size(530, 850); MinimumSize = new Size(410, 600);
             Owner = Rhino.UI.RhinoEtoApp.MainWindow;
+            // RhinoEtoApp.MainWindow may be null on Mac. A floating window stays
+            // above the GH editor without repeatedly activating it on canvas updates.
+            Topmost = true;
             var retry = new Button { Text = "Reconnect" };
             retry.Click += async (_, __) => await RefreshStatus();
             Content = new TableLayout {
