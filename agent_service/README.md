@@ -15,29 +15,48 @@ This directory contains the external agent foundation for Magpie.
 
 1. Start the Magpie plugin inside Rhino/Grasshopper and open the plugin window once.
 2. Confirm the local plugin bridge is up at `http://127.0.0.1:8765/health`.
-3. Create a Python environment and install dependencies:
+3. With Python 3.11 or newer, create and activate a virtual environment,
+   then install dependencies from the repository root:
 
 ```bash
 pip install -e ./agent_service
 ```
 
-4. Configure environment variables:
+4. Configure environment variables in the shell that starts the service.
+   For example, in PowerShell:
 
-```bash
-copy agent_service\.env.example agent_service\.env
+```powershell
+$env:OPENAI_BASE_URL = "https://api.deepseek.com"
+$env:OPENAI_MODEL = "deepseek-chat"
+$env:OPENAI_API_KEY = "your_new_deepseek_api_key"
 ```
 
-Recommended default for the main agent:
-
-- `OPENAI_BASE_URL=https://api.deepseek.com`
-- `OPENAI_MODEL=deepseek-chat`
-- `OPENAI_API_KEY=your_deepseek_api_key`
+`.env.example` lists the supported variables; copying it to `.env` alone
+does not load them. The plugin can also supply model configuration through
+its settings panel. Never commit real credentials or `.state/` data.
 
 5. Start the service:
 
 ```bash
 python agent_service/run_service.py
 ```
+
+The service binds to `127.0.0.1:8000` by default. Use `--port 8123` to
+select a different port, or `--reload` for development. The plugin's
+auto-start process supplies `--port` automatically; set its start command
+to `python agent_service/run_service.py` with the repository root as the
+working directory. If the working directory is `agent_service/`, use
+`python run_service.py` instead.
+
+## Regression checks
+
+After installing dependencies, run from the repository root:
+
+```bash
+python -m unittest discover -s agent_service/tests -v
+```
+
+The tests use temporary session storage and do not require Rhino or a model API key.
 
 ## Recommended first checks
 

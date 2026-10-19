@@ -84,10 +84,11 @@ async def delete_session(session_id: str, request: Request, container: ServiceCo
 async def set_session_fact(
     session_id: str,
     request: SetFactRequest,
+    http_request: Request,
     container: ServiceContainer = Depends(get_container),
 ) -> dict:
     return success_envelope(
-        request_id=request.state.request_id,
+        request_id=http_request.state.request_id,
         data=container.context_store.set_fact(session_id, request.key, request.value).model_dump(mode="json"),
     )
 
@@ -104,10 +105,11 @@ async def list_tasks(session_id: str, request: Request, container: ServiceContai
 async def add_task(
     session_id: str,
     request: AddTaskRequest,
+    http_request: Request,
     container: ServiceContainer = Depends(get_container),
 ) -> dict:
     return success_envelope(
-        request_id=request.state.request_id,
+        request_id=http_request.state.request_id,
         data=container.task_store.add(session_id, request.title, request.description).model_dump(mode="json"),
     )
 
@@ -117,6 +119,7 @@ async def update_task(
     session_id: str,
     task_id: str,
     request: UpdateTaskRequest,
+    http_request: Request,
     container: ServiceContainer = Depends(get_container),
 ) -> dict:
     try:
@@ -129,7 +132,7 @@ async def update_task(
             description=request.description,
         )
         return success_envelope(
-            request_id=request.state.request_id,
+            request_id=http_request.state.request_id,
             data=item.model_dump(mode="json"),
         )
     except KeyError as exc:

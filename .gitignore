@@ -4,3 +4,18 @@ obj/
 *.user
 *.suo
 *.pdb
+
+# Local credentials, runtime state and Python build artifacts
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+.state/
+
+# Rhino integration test reports
+MacBridge/tests/*-result.json
