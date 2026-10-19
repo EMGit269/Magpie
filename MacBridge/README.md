@@ -40,10 +40,14 @@ Bridge 只监听 `127.0.0.1`。端口被占用时加载失败，日志位于 `~/
 
 ## 支持范围
 
-支持 9 个工具：画布摘要、组件查询、邻域上下文、错误检查、重算、连线、删除、改值、批量创建组件图。
+支持 10 个工具：已安装组件目录、画布摘要、组件查询、邻域上下文、错误检查、重算、连线、删除、改值、批量创建组件图。
 全部画布请求（包括 ID 解析）在 Rhino 主线程执行，支持 Public ID 和完整实例 GUID。
 改值支持 Number Slider、Panel、Boolean Toggle。滑块支持 `min`、`max`、`decimals`。
-组件按准确名称、昵称或 `component_guid` 查找，名称重复时需要 GUID。
+创建滑块时可在组件规格内指定 `min`、`max`、`decimals`；`value` 为单个数字字符串，例如 `"15"`。
+未指定范围时，新滑块自动扩大默认范围以容纳初始值；显式范围之外的值仍会被拒绝。
+组件优先按准确名称查找，其次是昵称；同名的构造组件优先于几何参数。
+使用 `search_component_catalog` 查询真实 `component_guid`、端口类型、说明与编号，避免猜测 GUID。
+组件查询和上下文返回输出 `data_count` 及最多 5 条预览，圆预览包含有效性、半径和圆心，便于验证实际生成结果。
 批量创建的连接使用 `from_alias` / `to_alias` 或现有组件的 `from_id`；
 目标必须是本批新建组件。向现有目标连线请单独调用 `connect_components`，以保留撤销行为。
 创建操作先验证所有组件和连线，失败时回滚本批已添加对象。
@@ -62,19 +66,21 @@ python3 MacBridge/tests/run_smoke.py --rhino rhinocode_remotepipe_实际PID
 ```
 
 测试临时切换到独立 GH 文档，结束时恢复原画布；测试期间请勿手动切换或编辑画布。
-涵盖 manifest、不可用工具、无效 JSON、创建/查询/改值/连线/删除、无效操作不留对象、24 个并发请求。
+涵盖 manifest、不可用工具、无效 JSON、创建/查询/改值/连线/删除、Circle 同名识别、半径输出、滑块范围、无效操作不留对象、24 个并发请求。
 `rhinocode` 首次执行可能需要初始化 Rhino 自带 Python；请先完成初始化后再运行。
 仅构建可运行 `dotnet build MacBridge/Magpie.MacBridge.csproj -c Release`。
 
 ## Mac 聊天窗口
 
-在 Grasshopper 的 `Magpie → Agent` 分类放置 **Magpie Agent** 组件，双击组件打开聊天窗口。
+最快方式：点击 Grasshopper 顶部菜单 **Magpie → 打开 Agent**，无需放置组件。
+也可双击画布搜索 **Magpie Agent** 并放置，或在 `Magpie → Agent` 分类找到该组件；双击组件打开聊天窗口。
 输入自然语言任务后点击发送，或按 `⌘ + Enter`；生成过程中再次点击发送按钮可停止。
 窗口支持流式回复、工具结果、会话历史、新建、重命名和删除会话，以及主题切换。
 关闭聊天窗口会取消当前生成，Bridge 和共享的 Agent 服务继续运行。
 
 回复支持 Markdown 标题、列表、代码块和表格，并可一键复制。文字与工具调用按执行阶段排列，
 同名工具通过调用 ID 对应结果；工具详情默认折叠，失败时自动展开。阅读较早消息时不会强制滚动到底部。
+执行中断时会保留任务上下文并显示最后的工具错误，不会重新发起没有工具的普通对话来替代执行结果。
 
 ### 引用画布
 
@@ -119,6 +125,9 @@ dotnet run --project MacBridge/tests/Native/Native.csproj
 # 实际 Rhino / WebKit 窗口测试：流式模型、Markdown、安全渲染、工具顺序、长中文消息、画布绑定及历史
 # 需要已配置可用的模型（会发出少量模型请求）
 python3 MacBridge/tests/ui_smoke.py --rhino rhinocode_remotepipe_实际PID
+
+# 真实模型执行“画一个随机的圆”，验证菜单入口和恰好一个有效圆输出
+python3 MacBridge/tests/agent_circle_smoke.py --rhino rhinocode_remotepipe_实际PID
 ```
 
 原生测试使用独立临时配置目录，不修改当前模型密钥；窗口测试切换临时画布，并在结束时恢复原画布、删除测试会话。

@@ -10,11 +10,13 @@ namespace Magpie.HostBridge
         private readonly GrasshopperDocumentQueryService _documentQueryService;
         private readonly GrasshopperCanvasMutationService _canvasMutationService;
         private readonly HashSet<string> _availableTools;
+        private readonly Func<string, int, string> _componentCatalog;
 
-        public GrasshopperHostToolExecutor(GrasshopperDocumentQueryService documentQueryService, GrasshopperCanvasMutationService canvasMutationService, IEnumerable<string> availableTools = null)
+        public GrasshopperHostToolExecutor(GrasshopperDocumentQueryService documentQueryService, GrasshopperCanvasMutationService canvasMutationService, IEnumerable<string> availableTools = null, Func<string, int, string> componentCatalog = null)
         {
             _documentQueryService = documentQueryService ?? throw new ArgumentNullException(nameof(documentQueryService));
             _canvasMutationService = canvasMutationService ?? throw new ArgumentNullException(nameof(canvasMutationService));
+            _componentCatalog = componentCatalog;
             _availableTools = availableTools == null ? null : new HashSet<string>(availableTools, StringComparer.Ordinal);
         }
 
@@ -68,10 +70,17 @@ namespace Magpie.HostBridge
                 BuildHostToolDescriptor("connect_components", false, "Connect two existing Grasshopper component ports."),
                 BuildHostToolDescriptor("remove_component", false, "Remove one existing Grasshopper component."),
                 BuildHostToolDescriptor("set_component_value", false, "Set value/configuration on an existing helper component."),
-                BuildHostToolDescriptor("create_component_graph", false, "Create a batch of Grasshopper components and connections. Each component must have numeric 'x' and 'y' canvas coordinates, a 'name' (Grasshopper component name or alias), and optional 'label', 'value', and 'component_guid'. Example: {\"components\":[{\"name\":\"Circle\",\"x\":100,\"y\":100,\"label\":\"C\"}],\"connections\":[]}"),
+                BuildHostToolDescriptor("create_component_graph", false, "Create a batch of Grasshopper components and connections. Each component must have numeric 'x' and 'y' canvas coordinates, a 'name' (Grasshopper component name or alias), and optional 'alias', 'label', string 'value', and 'component_guid'. Connections use from_alias/to_alias and zero-based from_index/to_index. Example: {\"components\":[{\"name\":\"Circle\",\"x\":100,\"y\":100,\"label\":\"C\"}],\"connections\":[]}"),
                 BuildHostToolDescriptor("create_csharp_script", false, "Create a C# Script component with ports/body/helpers."),
                 BuildHostToolDescriptor("edit_csharp_script", false, "Edit an existing C# Script component body.")
             };
+            if (_componentCatalog != null)
+            {
+                tools.OfType<JObject>().First(t => t["name"]?.ToString() == "create_component_graph")["description"] +=
+                    " On macOS: Number Slider supports numeric min/max and integer decimals inside each component spec. Its string value must be a single number, e.g. \"15\", not an interval like \"5..30\". Without explicit bounds the initial range expands to include the value. Geometry components do not accept value; connect a Number Slider to the correct input port from search_component_catalog. Exact primary component names take precedence over nicknames. Example: {\"components\":[{\"name\":\"Number Slider\",\"alias\":\"r\",\"value\":\"15\",\"min\":5,\"max\":30,\"x\":100,\"y\":100},{\"name\":\"Circle\",\"alias\":\"c\",\"x\":320,\"y\":100}],\"connections\":[{\"from_alias\":\"r\",\"to_alias\":\"c\",\"to_index\":1}]}";
+                tools.Add(BuildHostToolDescriptor("search_component_catalog", true,
+                    "Search installed component TYPES before creating geometry. Returns real component_guid, category, and port indices. Use these GUIDs; never guess them. Example arguments: {\"query\":\"Circle\",\"max_results\":10}. Canvas query_components only searches placed instances."));
+            }
             return _availableTools == null ? tools : new JArray(tools.OfType<JObject>().Where(t => _availableTools.Contains(t["name"].ToString())));
         }
 
@@ -119,6 +128,10 @@ namespace Magpie.HostBridge
                     };
                     break;
 
+                case "search_component_catalog":
+                    spec.InputSchema = new JArray { Field("query", "string", true, "Component name or nickname to search."),
+                        Field("max_results", "integer", false, "Maximum matches, 1-20 (default 10).") };
+                    break;
                 case "get_component_context":
                     spec.InputSchema = new JArray
                     {
@@ -184,6 +197,9 @@ namespace Magpie.HostBridge
         {
             switch ((tool ?? "").Trim())
             {
+                case "search_component_catalog":
+                    if (_componentCatalog == null) throw new NotSupportedException("Component catalog is unavailable on this host.");
+                    return _componentCatalog(args["query"]?.ToString(), args["max_results"]?.Value<int?>() ?? 10);
                 case "get_canvas_summary":
                     return _documentQueryService.GetCanvasSummary();
                 case "query_components":

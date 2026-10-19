@@ -80,6 +80,9 @@ namespace Magpie.HostBridge
                 EnsureType(component, "component_guid", JTokenType.String);
                 EnsureType(component, "label", JTokenType.String);
                 EnsureType(component, "value", JTokenType.String);
+                EnsureNumberType(component, "min");
+                EnsureNumberType(component, "max");
+                EnsureIntegerRange(component, "decimals", 0, 10);
             }
 
             var connections = args["connections"] as JArray;

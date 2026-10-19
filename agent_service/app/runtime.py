@@ -40,6 +40,7 @@ class LangChainRuntimeService:
 
     async def invoke(self, request: AgentInvokeRequest) -> AgentInvokeResponse:
         events: list[AgentEvent] = []
+        tools_ready = False
         if request.user_goal:
             self._context_store.set_goal(request.session_id, request.user_goal)
 
@@ -51,6 +52,7 @@ class LangChainRuntimeService:
 
         try:
             tools = await self._tool_registry.build_langchain_tools(request.session_id, request.document_id)
+            tools_ready = True
             tool_names = [tool.name for tool in tools]
             structured(
                 logger,
@@ -90,6 +92,7 @@ class LangChainRuntimeService:
             result = await agent.ainvoke(
                 {"messages": history_messages},
                 context={"session_id": request.session_id, "canvas_context": request.canvas_context},
+                config={"recursion_limit": max(40, self._settings.model_run_limit * 6 + 12)},
             )
 
             output_text = self._extract_output_text(result)
@@ -123,9 +126,13 @@ class LangChainRuntimeService:
                 session_id=request.session_id,
                 error=str(exc),
             )
+            if tools_ready:
+                return self._interrupted_response(request, exc, events)
             return await self._invoke_plain_chat(request, str(exc))
 
     async def ainvoke_stream(self, request: AgentInvokeRequest) -> AsyncIterator[AgentEvent]:
+        tools_ready = False
+        last_tool_error = ""
         if request.user_goal:
             self._context_store.set_goal(request.session_id, request.user_goal)
 
@@ -137,6 +144,7 @@ class LangChainRuntimeService:
 
         try:
             tools = await self._tool_registry.build_langchain_tools(request.session_id, request.document_id)
+            tools_ready = True
             tool_names = [tool.name for tool in tools]
             structured(
                 logger,
@@ -175,7 +183,7 @@ class LangChainRuntimeService:
             ]
             async for event in agent.astream_events(
                 {"messages": history_messages},
-                config={},
+                config={"recursion_limit": max(40, self._settings.model_run_limit * 6 + 12)},
                 context={"session_id": request.session_id, "canvas_context": request.canvas_context},
                 version="v2",
             ):
@@ -201,6 +209,8 @@ class LangChainRuntimeService:
                     name = event.get("name") or ""
                     output = data.get("output")
                     result_text, result_data = self._normalize_tool_output(output)
+                    if result_data.get("status") == "error":
+                        last_tool_error = str(result_data.get("error") or result_text)[:800]
                     yield AgentEvent(
                         type="tool_result",
                         tool=name,
@@ -211,6 +221,7 @@ class LangChainRuntimeService:
                 elif kind == "on_tool_error":
                     name = event.get("name") or ""
                     error = data.get("error") or "Tool failed."
+                    last_tool_error = str(error)[:800]
                     yield AgentEvent(
                         type="tool_result",
                         tool=name,
@@ -244,9 +255,24 @@ class LangChainRuntimeService:
                 session_id=request.session_id,
                 error=str(exc),
             )
-            response = await self._invoke_plain_chat(request, str(exc))
+            response = self._interrupted_response(request, exc, last_tool_error=last_tool_error) if tools_ready else await self._invoke_plain_chat(request, str(exc))
             for evt in response.events:
                 yield evt
+
+    def _interrupted_response(self, request: AgentInvokeRequest, error: Exception,
+                              events: list[AgentEvent] | None = None, last_tool_error: str = "") -> AgentInvokeResponse:
+        reason = str(error)
+        limited = "recursion" in reason.lower() or "limit" in reason.lower()
+        text = "本次任务尚未完成：" + ("已达到本轮执行次数上限。" if limited else "Agent 执行中断。")
+        if last_tool_error:
+            text += "\n\n最后一次工具错误：" + last_tool_error
+        text += "\n\n请先检查当前画布，确认已执行的步骤后再继续。"
+        self._context_store.append_message(request.session_id, "assistant", text)
+        return AgentInvokeResponse(session_id=request.session_id, status="failed", mode="agent",
+            events=[*(events or []), AgentEvent(type="warning", text=text, status="failed", data={"reason": reason}),
+                    AgentEvent(type="final", text=text, status="failed")],
+            final_text=text, output_text=text, tool_names=[], message_count=0,
+            raw={"mode": "interrupted", "reason": reason})
 
     def _build_model(self) -> ChatOpenAI:
         api_key, base_url, model_name = load_model_config(self._settings)
@@ -273,6 +299,11 @@ class LangChainRuntimeService:
                 "You are the external Magpie agent.",
                 "The Grasshopper plugin host is the only process allowed to mutate Rhino or Grasshopper state.",
                 "When you need canvas state or mutations, use the registered host bridge tools.",
+                "For requests to draw or build, actually create geometry through tools. Choose reasonable defaults when unspecified.",
+                "For a one-off random shape, choose concrete arbitrary parameters and create exactly the requested number of shapes. Build random-generator networks only when the user asks for a parametric random definition or seed control.",
+                "Before creating components, use search_component_catalog if available to obtain actual GUIDs and input port indices. Never guess GUIDs.",
+                "Number Slider values are numeric strings; specify min/max in the component spec for intended ranges. Connect sliders to geometry input ports; do not set geometry with set_component_value.",
+                "After creating geometry, recompute and inspect output data_count and preview via get_component_context, as well as errors, before claiming success. Check the requested geometry count and dimensions; absence of errors alone is insufficient. Do not repeat identical failed calls.",
                 "",
                 f"Session id: {session_id}",
                 f"User goal: {context.user_goal or '(not set)'}",
@@ -306,7 +337,8 @@ class LangChainRuntimeService:
         context = self._context_store.get(request.session_id)
         system_lines = [
             "You are Magpie, an assistant embedded in Grasshopper.",
-            "If local Grasshopper host tools are unavailable, continue as a normal conversational assistant.",
+            "The tool connection failed for this request. Explain this without claiming tools are permanently unavailable. Use the conversation history to understand follow-up requests.",
+            f"Connection failure: {fallback_reason}",
             "Do not claim to have inspected or modified the Grasshopper canvas unless tool results explicitly confirm it.",
             f"User goal: {context.user_goal or request.user_goal or '(not set)'}",
         ]
@@ -314,7 +346,7 @@ class LangChainRuntimeService:
         response = await model.ainvoke(
             [
                 SystemMessage(content="\n".join(system_lines)),
-                HumanMessage(content=request.user_input),
+                *[{"role": m.get("role", "user"), "content": m.get("content", "")} for m in context.recent_messages],
             ]
         )
         output_text = response.content if isinstance(response.content, str) else str(response.content)

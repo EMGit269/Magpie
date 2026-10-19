@@ -11,6 +11,7 @@
   <ItemGroup>
     <Reference Include="RhinoCommon" HintPath="$(RhinoResources)/RhinoCommon.dll" Private="false" />
     <Reference Include="Rhino.UI" HintPath="$(RhinoResources)/Rhino.UI.dll" Private="false" />
+    <Reference Include="System.Windows.Forms" HintPath="$(RhinoResources)/System.Windows.Forms.dll" Private="false" />
     <Reference Include="Eto" HintPath="$(RhinoResources)/Eto.dll" Private="false" />
     <Reference Include="Grasshopper" HintPath="$(GrasshopperResources)/Grasshopper.dll" Private="false" />
     <Reference Include="GH_IO" HintPath="$(GrasshopperResources)/GH_IO.dll" Private="false" />

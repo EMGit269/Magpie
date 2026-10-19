@@ -12,4 +12,4 @@ install -d "$library_dir/Magpie.MacBridge"
 install -m 644 "$bridge_dir/bin/Release/net8.0/Magpie.MacBridge.gha" "$library_dir/Magpie.MacBridge/"
 python3 "$bridge_dir/configure_service.py"
 echo "Installed: $library_dir/Magpie.MacBridge/Magpie.MacBridge.gha"
-echo 'Restart Rhino 8, open Grasshopper, and double-click a Magpie Agent component to chat.'
+echo 'Restart Rhino 8, open Grasshopper, then choose Magpie > 打开 Agent.'

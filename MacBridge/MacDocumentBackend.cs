@@ -17,7 +17,7 @@ namespace Magpie.MacBridge
     internal sealed class MacDocumentBackend : IGrasshopperHostBridgeBackend
     {
         internal static readonly string[] Tools = {
-            "get_canvas_summary", "query_components", "get_component_context", "check_gh_errors",
+            "search_component_catalog", "get_canvas_summary", "query_components", "get_component_context", "check_gh_errors",
             "recompute_canvas", "connect_components", "remove_component", "set_component_value", "create_component_graph"
         };
 
@@ -66,6 +66,24 @@ namespace Magpie.MacBridge
             return result;
         }
 
+        private static JObject DataPreview(Grasshopper.Kernel.Types.IGH_Goo goo)
+        {
+            if (goo == null) return new JObject { ["is_valid"] = false };
+            var result = new JObject { ["type"] = goo.TypeName, ["is_valid"] = goo.IsValid };
+            var value = goo.ScriptVariable();
+            if (value is Rhino.Geometry.Circle circle)
+            {
+                result["radius"] = circle.Radius;
+                result["center"] = new JArray(circle.Center.X, circle.Center.Y, circle.Center.Z);
+            }
+            else
+            {
+                var text = goo.ToString() ?? "";
+                result["value"] = text.Length > 200 ? text.Substring(0, 200) : text;
+            }
+            return result;
+        }
+
         private static JObject Describe(GH_Document doc, IGH_DocumentObject obj)
         {
             var connections = new JArray();
@@ -80,7 +98,8 @@ namespace Magpie.MacBridge
                 ["category"] = obj.Category, ["type"] = obj.GetType().FullName, ["is_script"] = IsScript(obj),
                 ["x"] = obj.Attributes?.Pivot.X ?? 0, ["y"] = obj.Attributes?.Pivot.Y ?? 0,
                 ["inputs"] = new JArray(inputs.Select((p, i) => new JObject { ["index"] = i, ["name"] = p.Name, ["nickname"] = p.NickName, ["source_count"] = p.SourceCount })),
-                ["outputs"] = new JArray(Ports(obj, true).Select((p, i) => new JObject { ["index"] = i, ["name"] = p.Name, ["nickname"] = p.NickName, ["recipient_count"] = p.Recipients.Count })),
+                ["outputs"] = new JArray(Ports(obj, true).Select((p, i) => new JObject { ["index"] = i, ["name"] = p.Name, ["nickname"] = p.NickName, ["recipient_count"] = p.Recipients.Count,
+                    ["data_count"] = p.VolatileDataCount, ["preview"] = new JArray(p.VolatileData.AllData(true).Take(5).Select(DataPreview)) })),
                 ["connections"] = connections, ["has_errors"] = HasErrors(obj)
             };
         }
@@ -201,6 +220,32 @@ namespace Magpie.MacBridge
             return Json(new { updated = true, guid = obj.InstanceGuid, value });
         }
 
+        public string SearchComponentCatalog(string query, int maxResults)
+        {
+            if (string.IsNullOrWhiteSpace(query)) throw new InvalidOperationException("Provide a component name in query.");
+            if (maxResults < 1 || maxResults > 20) throw new InvalidOperationException("max_results must be between 1 and 20.");
+            var matches = Instances.ComponentServer.ObjectProxies.Where(p => !p.Obsolete
+                && (p.Desc.Name + " " + p.Desc.NickName).IndexOf(query.Trim(), StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(p => p.Desc.Name.Equals(query, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenBy(p => p.Desc.Category).ThenBy(p => p.Desc.Name).ToList();
+            var items = new JArray();
+            foreach (var proxy in matches.Take(maxResults))
+            {
+                var obj = proxy.CreateInstance();
+                if (obj == null) continue;
+                var component = obj as IGH_Component;
+                items.Add(new JObject { ["name"] = proxy.Desc.Name, ["nickname"] = proxy.Desc.NickName,
+                    ["component_guid"] = proxy.Guid.ToString(), ["category"] = proxy.Desc.Category,
+                    ["subcategory"] = proxy.Desc.SubCategory, ["is_component"] = component != null,
+                    ["inputs"] = component == null ? new JArray() : new JArray(component.Params.Input.Select((p, i) =>
+                        new JObject { ["index"] = i, ["name"] = p.Name, ["nickname"] = p.NickName,
+                            ["type"] = p.TypeName, ["description"] = p.Description, ["access"] = p.Access.ToString(), ["optional"] = p.Optional })),
+                    ["outputs"] = new JArray(Ports(obj, true).Select((p, i) =>
+                        new JObject { ["index"] = i, ["name"] = p.Name, ["nickname"] = p.NickName })) });
+            }
+            return Json(new JObject { ["query"] = query, ["total"] = matches.Count, ["matches"] = items });
+        }
+
         private static IGH_DocumentObject Instantiate(JObject spec)
         {
             var guidText = spec["component_guid"]?.ToString();
@@ -212,8 +257,19 @@ namespace Magpie.MacBridge
                 if (name.Equals("Number Slider", StringComparison.OrdinalIgnoreCase)) return new GH_NumberSlider();
                 if (name.Equals("Panel", StringComparison.OrdinalIgnoreCase)) return new GH_Panel();
                 if (name.Equals("Boolean Toggle", StringComparison.OrdinalIgnoreCase)) return new GH_BooleanToggle();
-                var matches = Instances.ComponentServer.ObjectProxies.Where(p => !p.Obsolete && (p.Desc.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || p.Desc.NickName.Equals(name, StringComparison.OrdinalIgnoreCase))).ToList();
-                if (matches.Count != 1) throw new InvalidOperationException("Component name is missing or ambiguous; supply component_guid: " + name);
+                var available = Instances.ComponentServer.ObjectProxies.Where(p => !p.Obsolete).ToList();
+                var matches = available.Where(p => p.Desc.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matches.Count == 0) matches = available.Where(p => p.Desc.NickName.Equals(name, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matches.Count > 1)
+                {
+                    // Prefer the actual construction component over a geometry parameter with the same name.
+                    var constructors = matches.Where(p => p.CreateInstance() is IGH_Component).ToList();
+                    if (constructors.Count == 1) matches = constructors;
+                }
+                if (matches.Count != 1)
+                    throw new InvalidOperationException("Component name is missing or ambiguous: " + name
+                        + ". Call search_component_catalog and use an exact component_guid. Matches: "
+                        + string.Join("; ", matches.Take(12).Select(p => p.Desc.Name + " [" + p.Desc.Category + "] " + p.Guid)));
                 obj = matches[0].CreateInstance();
             }
             return obj ?? throw new InvalidOperationException("Component type could not be instantiated.");
@@ -234,7 +290,17 @@ namespace Magpie.MacBridge
                 if (!string.IsNullOrEmpty(label)) obj.NickName = label;
                 var alias = spec["alias"]?.ToString() ?? spec["alias_id"]?.ToString() ?? label ?? pending.Count.ToString(CultureInfo.InvariantCulture);
                 if (!aliases.TryAdd(alias, obj)) throw new InvalidOperationException("Duplicate component alias: " + alias);
-                if (spec["value"] != null) ValueChange(obj, spec["value"].ToString())();
+                if (spec["value"] != null)
+                {
+                    var lower = spec["min"]?.Value<double?>(); var upper = spec["max"]?.Value<double?>();
+                    if (obj is GH_NumberSlider slider)
+                    {
+                        var initial = double.Parse(spec["value"].ToString(), NumberStyles.Float, CultureInfo.InvariantCulture);
+                        lower ??= Math.Min((double)slider.Slider.Minimum, initial);
+                        upper ??= Math.Max((double)slider.Slider.Maximum, initial);
+                    }
+                    ValueChange(obj, spec["value"].ToString(), lower, upper, spec["decimals"]?.Value<int?>())();
+                }
                 pending.Add(obj);
             }
             IGH_DocumentObject Resolve(JObject wire, string side)

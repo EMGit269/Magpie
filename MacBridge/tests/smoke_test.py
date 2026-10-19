@@ -30,7 +30,7 @@ class MacBridgeSmoke(unittest.TestCase):
         self.assertEqual(request('/health')['status'], 'ok')
         tools = {tool['name'] for tool in request('/tools/manifest')['tools']}
         self.assertEqual(tools, {
-            'get_canvas_summary', 'query_components', 'get_component_context',
+            'search_component_catalog', 'get_canvas_summary', 'query_components', 'get_component_context',
             'check_gh_errors', 'recompute_canvas', 'connect_components',
             'remove_component', 'set_component_value', 'create_component_graph'})
         self.assertEqual(invoke('edit_csharp_script', id='01', body='')['status'], 'error')
@@ -86,7 +86,38 @@ class MacBridgeSmoke(unittest.TestCase):
             self.assertEqual(invoke('create_component_graph', components=components, connections=wires)['status'], 'error')
             self.assertEqual(self.ok('get_canvas_summary')['component_count'], before)
 
-    def test_04_parallel_ui_dispatch(self):
+    def test_04_circle_creation(self):
+        catalog = self.ok('search_component_catalog', query='Circle', max_results=20)
+        circle = next(c for c in catalog['matches'] if c['name'] == 'Circle' and c['is_component'])
+        self.assertEqual([p['name'] for p in circle['inputs']], ['Plane', 'Radius'])
+        self.assertTrue(circle['component_guid'])
+        before = self.ok('get_canvas_summary')['component_count']
+        # An exact primary name must win over the Circle parameter and other nicknames.
+        for spec in [
+            {'value': '15'},
+            {'value': '25', 'min': 5, 'max': 30, 'decimals': 2},
+            {'value': '-12', 'min': -50, 'max': 50},
+        ]:
+            graph = self.ok('create_component_graph', components=[
+                {'name': 'Number Slider', 'alias': 'r', 'x': 0, 'y': 0, **spec},
+                {'name': 'Circle', 'alias': 'c', 'x': 200, 'y': 0},
+            ], connections=[{'from_alias': 'r', 'to_alias': 'c', 'to_index': 1}])
+            aliases = graph['aliases']
+            component = next(c for c in graph['components'] if c['guid'] == aliases['c'])
+            self.assertEqual([p['name'] for p in component['inputs']], ['Plane', 'Radius'])
+            if float(spec['value']) > 0:
+                self.assertEqual(component['outputs'][0]['data_count'], 1)
+                preview = component['outputs'][0]['preview'][0]
+                self.assertTrue(preview['is_valid'])
+                self.assertAlmostEqual(preview['radius'], float(spec['value']))
+            self.ok('remove_component', id=aliases['c'])
+            self.ok('remove_component', id=aliases['r'])
+        invalid = invoke('create_component_graph', components=[
+            {'name': 'Number Slider', 'value': '40', 'min': 5, 'max': 30}], connections=[])
+        self.assertEqual(invalid['status'], 'error')
+        self.assertEqual(self.ok('get_canvas_summary')['component_count'], before)
+
+    def test_05_parallel_ui_dispatch(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             replies = list(executor.map(lambda _: invoke('get_canvas_summary'), range(24)))
         self.assertTrue(all(reply['status'] == 'ok' for reply in replies), replies)

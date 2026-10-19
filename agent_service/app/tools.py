@@ -154,6 +154,9 @@ class ToolRegistryService:
             if not tool_name:
                 continue
             description = str(item.get("description", "")).strip() or f"Forward call to host tool {tool_name}."
+            fields = item.get("input_schema")
+            if fields:
+                description += " Arguments schema (inside arguments): " + json.dumps(fields, ensure_ascii=False)
             args_schema = create_model(
                 f"{self._safe_model_name(tool_name)}Input",
                 arguments=(dict[str, Any], Field(default_factory=dict, description="Arguments forwarded to the plugin host tool.")),

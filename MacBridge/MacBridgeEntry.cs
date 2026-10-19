@@ -46,11 +46,12 @@ namespace Magpie.MacBridge
                 var backend = new MacDocumentBackend();
                 var executor = new GrasshopperHostToolExecutor(
                     new GrasshopperDocumentQueryService(backend),
-                    new GrasshopperCanvasMutationService(backend), MacDocumentBackend.Tools);
+                    new GrasshopperCanvasMutationService(backend), MacDocumentBackend.Tools, backend.SearchComponentCatalog);
                 _runtime = new GrasshopperHostBridgeRuntime(executor, Port, request => OnUiThread(executor, request));
                 _runtime.EnsureServer();
                 if (!IsRunning)
                     throw new InvalidOperationException($"Could not start Magpie bridge on port {Port}. See ~/Library/Logs/Magpie/bridge.log.");
+                MacAgentMenu.Start();
                 AddGhLog.Info($"Mac bridge ready at http://127.0.0.1:{Port}");
             }
         }

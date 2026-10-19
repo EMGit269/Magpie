@@ -5,11 +5,13 @@ from pathlib import Path
 import subprocess
 import time
 import unittest
+import tempfile
 
 from smoke_test import MacBridgeSmoke
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--rhino', required=True, help='Instance ID from rhinocode list')
+parser.add_argument('--assembly', type=Path, help='Optional assembly for testing an updated build without restarting Rhino')
 parser.add_argument('--rhinocode', default='/Applications/Rhino 8.app/Contents/Resources/bin/rhinocode')
 args = parser.parse_args()
 folder = Path(__file__).resolve().parent
@@ -17,7 +19,14 @@ report = folder / 'setup-result.json'
 
 
 def script(name):
-    subprocess.run([args.rhinocode, '-r', args.rhino, 'script', str(folder / name)], check=True, timeout=60)
+    if name == 'setup_canvas.py' and args.assembly:
+        with tempfile.TemporaryDirectory(prefix='magpie-bridge-setup-') as temporary:
+            wrapper = Path(temporary) / 'setup.py'
+            wrapper.write_text('#! python 3\nimport runpy\nrunpy.run_path(' + repr(str(folder / name)) +
+                               ', init_globals={"ASSEMBLY_PATH":' + repr(str(args.assembly.resolve())) + '})\n')
+            subprocess.run([args.rhinocode, '-r', args.rhino, 'script', str(wrapper)], check=True, timeout=60)
+    else:
+        subprocess.run([args.rhinocode, '-r', args.rhino, 'script', str(folder / name)], check=True, timeout=60)
 
 
 report.unlink(missing_ok=True)
