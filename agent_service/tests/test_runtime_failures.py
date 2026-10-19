@@ -6,6 +6,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.tools import StructuredTool
+
 from app.context_store import SessionContextStore
 from app.runtime import LangChainRuntimeService
 from app.schemas import AgentInvokeRequest
@@ -20,7 +24,7 @@ class RuntimeFailureTests(unittest.IsolatedAsyncioTestCase):
         self.store = SessionContextStore(root)
         self.registry = SimpleNamespace(build_langchain_tools=AsyncMock(return_value=[]))
         self.service = LangChainRuntimeService(
-            settings=SimpleNamespace(model_run_limit=8), context_store=self.store,
+            settings=SimpleNamespace(), context_store=self.store,
             task_store=TaskStore(root), tool_registry=self.registry,
         )
         self.enterContext(patch("app.runtime.load_model_config", return_value=("test", None, "test")))
@@ -40,7 +44,7 @@ class RuntimeFailureTests(unittest.IsolatedAsyncioTestCase):
              patch.object(self.service, "_invoke_plain_chat", new_callable=AsyncMock) as fallback:
             events = [e async for e in self.service.ainvoke_stream(AgentInvokeRequest(session_id="circle", user_input="画一个圆"))]
         fallback.assert_not_awaited()
-        self.assertGreater(seen_config[0]["recursion_limit"], 25)
+        self.assertEqual(seen_config[0]["recursion_limit"], float("inf"))
         self.assertEqual(events[-1].status, "failed")
         self.assertIn("Radius is out of range", events[-1].text)
         self.assertNotIn("没有连接", events[-1].text)
@@ -53,6 +57,32 @@ class RuntimeFailureTests(unittest.IsolatedAsyncioTestCase):
             response = await self.service.invoke(AgentInvokeRequest(session_id="circle", user_input="画一个圆"))
         fallback.assert_not_awaited()
         self.assertEqual(response.status, "failed")
+
+    async def test_real_agent_can_exceed_old_model_and_graph_limits_in_both_modes(self):
+        # Use the real LangChain/LangGraph loop with a local model, exceeding both
+        # the former 8/12 model calls and 25/84 graph steps without network calls.
+        class ToolModel(FakeMessagesListChatModel):
+            def bind_tools(self, tools, **kwargs):
+                return self
+
+        calls = []
+        def ping() -> str:
+            calls.append(True)
+            return "ok"
+
+        self.registry.build_langchain_tools.return_value = [StructuredTool.from_function(
+            func=ping, name="ping", description="Record a test step.")]
+        responses = [AIMessage(content="", tool_calls=[{"name": "ping", "args": {}, "id": f"step-{i}"}])
+                     for i in range(50)] + [AIMessage(content="完成")]
+        with patch.object(self.service, "_build_model", side_effect=lambda: ToolModel(responses=responses)):
+            response = await self.service.invoke(AgentInvokeRequest(session_id="unlimited-sync", user_input="执行全部步骤"))
+            self.assertEqual(response.status, "completed", response.final_text)
+            self.assertEqual(response.final_text, "完成")
+            self.assertEqual(len(calls), 50)
+            events = [e async for e in self.service.ainvoke_stream(AgentInvokeRequest(session_id="unlimited-stream", user_input="执行全部步骤"))]
+        self.assertEqual(events[-1].status, "completed", events[-1].text)
+        self.assertEqual(events[-1].text, "完成")
+        self.assertEqual(len(calls), 100)
 
     async def test_connection_fallback_keeps_follow_up_history(self):
         self.store.append_message("circle", "user", "画一个随机的圆")

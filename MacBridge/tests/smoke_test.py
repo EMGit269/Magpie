@@ -86,7 +86,36 @@ class MacBridgeSmoke(unittest.TestCase):
             self.assertEqual(invoke('create_component_graph', components=components, connections=wires)['status'], 'error')
             self.assertEqual(self.ok('get_canvas_summary')['component_count'], before)
 
-    def test_04_circle_creation(self):
+    def test_04_catalog_and_sphere_output(self):
+        batch = self.ok('search_component_catalog', queries=['Sphere', 'Construct Point', 'Construct Vector'], max_results=5)
+        self.assertEqual([r['query'] for r in batch['results']], ['Sphere', 'Construct Point', 'Construct Vector'])
+        vector = batch['results'][2]
+        self.assertEqual(vector['resolved_query'], 'Vector XYZ')
+        self.assertTrue(vector['matches'], vector)
+        self.assertEqual(vector['matches'][0]['name'], 'Vector XYZ')
+        self.assertTrue(vector['matches'][0]['description'])
+        for args in ({'queries': []}, {'queries': ['Sphere'] * 9}, {'query': 'Sphere', 'queries': ['Sphere']}, {'queries': [1]}):
+            self.assertEqual(invoke('search_component_catalog', **args)['status'], 'error')
+        graph = self.ok('create_component_graph', components=[
+            {'name': 'Number Slider', 'alias': 'r', 'value': '12.5'},
+            {'name': 'Number Slider', 'alias': 'x', 'value': '25'},
+            {'name': 'Construct Point', 'alias': 'p'},
+            {'name': 'Sphere', 'alias': 'a'},
+            {'name': 'Sphere', 'alias': 'b'},
+        ], connections=[{'from_alias': 'r', 'to_alias': 'a', 'to_index': 1},
+                        {'from_alias': 'r', 'to_alias': 'b', 'to_index': 1},
+                        {'from_alias': 'x', 'to_alias': 'p', 'to_index': 0},
+                        {'from_alias': 'p', 'to_alias': 'b', 'to_index': 0}])
+        spheres = [c for c in graph['components'] if c['name'] == 'Sphere']
+        self.assertEqual(len(spheres), 2)
+        previews = [s['outputs'][0]['preview'][0] for s in spheres]
+        self.assertTrue(all(p['shape'] == 'sphere' and p['is_valid'] for p in previews))
+        self.assertEqual([p['radius'] for p in previews], [12.5, 12.5])
+        self.assertEqual([p['center'] for p in previews], [[0, 0, 0], [25, 0, 0]])
+        for guid in graph['aliases'].values():
+            self.ok('remove_component', id=guid)
+
+    def test_05_circle_creation(self):
         catalog = self.ok('search_component_catalog', query='Circle', max_results=20)
         circle = next(c for c in catalog['matches'] if c['name'] == 'Circle' and c['is_component'])
         self.assertEqual([p['name'] for p in circle['inputs']], ['Plane', 'Radius'])
@@ -117,7 +146,7 @@ class MacBridgeSmoke(unittest.TestCase):
         self.assertEqual(invalid['status'], 'error')
         self.assertEqual(self.ok('get_canvas_summary')['component_count'], before)
 
-    def test_05_parallel_ui_dispatch(self):
+    def test_06_parallel_ui_dispatch(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             replies = list(executor.map(lambda _: invoke('get_canvas_summary'), range(24)))
         self.assertTrue(all(reply['status'] == 'ok' for reply in replies), replies)

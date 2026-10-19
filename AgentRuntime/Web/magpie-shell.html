@@ -1254,7 +1254,7 @@
           if (event.text) state.currentMessageBubble._rawText = event.text;
           finishAssistant();
         } else if (event.text) appendBubble('assistant', event.text);
-        clearRunningStates(); state.currentAgentBlock = null; scrollOutput(); return;
+        clearRunningStates(event.status); state.currentAgentBlock = null; scrollOutput(); return;
       }
       // A tool starts a new stage; subsequent prose must remain after that stage.
       finishAssistant();
@@ -1271,10 +1271,12 @@
       block.appendChild(renderEventCard(event)); scrollOutput();
     }
 
-    function clearRunningStates() {
+    function clearRunningStates(finalStatus) {
       messages.querySelectorAll('.agent-event.running').forEach(node => {
         node.classList.remove('running');
-        node.querySelector('.agent-event-status').textContent = node.classList.contains('tool_call') ? '已结束' : '已完成';
+        const failed = ['failed', 'error'].includes(finalStatus);
+        if (failed) node.classList.add('failed');
+        node.querySelector('.agent-event-status').textContent = failed ? '已中断' : node.classList.contains('tool_call') ? '已结束' : '已完成';
       });
     }
 
@@ -1283,7 +1285,9 @@
         clearTimeout(state.watchdog);
         state.watchdog = null;
       }
-      if (!state.sending) return;
+      // Once the host acknowledges the run, completion/error/cancel ends it.
+      // Long model or tool steps must not turn into a frontend time budget.
+      if (!state.sending || state.acked) return;
       state.watchdog = setTimeout(() => {
         if (!state.sending) return;
         removePendingBubble();

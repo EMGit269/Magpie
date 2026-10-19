@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -73,8 +74,16 @@ namespace Magpie.MacBridge
             var value = goo.ScriptVariable();
             if (value is Rhino.Geometry.Circle circle)
             {
+                result["shape"] = "circle";
                 result["radius"] = circle.Radius;
                 result["center"] = new JArray(circle.Center.X, circle.Center.Y, circle.Center.Z);
+            }
+            else if ((value as Rhino.Geometry.Surface ?? (value is Rhino.Geometry.Brep brep && brep.Surfaces.Count == 1 ? brep.Surfaces[0] : null))
+                is Rhino.Geometry.Surface surface && surface.TryGetSphere(out var sphere))
+            {
+                result["shape"] = "sphere";
+                result["radius"] = sphere.Radius;
+                result["center"] = new JArray(sphere.Center.X, sphere.Center.Y, sphere.Center.Z);
             }
             else
             {
@@ -224,9 +233,16 @@ namespace Magpie.MacBridge
         {
             if (string.IsNullOrWhiteSpace(query)) throw new InvalidOperationException("Provide a component name in query.");
             if (maxResults < 1 || maxResults > 20) throw new InvalidOperationException("max_results must be between 1 and 20.");
-            var matches = Instances.ComponentServer.ObjectProxies.Where(p => !p.Obsolete
-                && (p.Desc.Name + " " + p.Desc.NickName).IndexOf(query.Trim(), StringComparison.OrdinalIgnoreCase) >= 0)
-                .OrderBy(p => p.Desc.Name.Equals(query, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            var search = query.Trim();
+            // Use installed names, including common construction terminology.
+            if (search.Equals("Construct Vector", StringComparison.OrdinalIgnoreCase)) search = "Vector XYZ";
+            var boundary = new Regex(@"(?<![\p{L}\p{N}])" + Regex.Escape(search), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var available = Instances.ComponentServer.ObjectProxies.Where(p => !p.Obsolete).ToList();
+            var matches = available.Where(p => boundary.IsMatch(p.Desc.Name + " " + p.Desc.NickName)).ToList();
+            if (matches.Count == 0)
+                matches = available.Where(p => boundary.IsMatch(p.Desc.Description ?? "")).ToList();
+            matches = matches.OrderBy(p => p.Desc.Name.Equals(search, StringComparison.OrdinalIgnoreCase) ? 0
+                    : p.Desc.NickName.Equals(search, StringComparison.OrdinalIgnoreCase) ? 1 : 2)
                 .ThenBy(p => p.Desc.Category).ThenBy(p => p.Desc.Name).ToList();
             var items = new JArray();
             foreach (var proxy in matches.Take(maxResults))
@@ -236,14 +252,14 @@ namespace Magpie.MacBridge
                 var component = obj as IGH_Component;
                 items.Add(new JObject { ["name"] = proxy.Desc.Name, ["nickname"] = proxy.Desc.NickName,
                     ["component_guid"] = proxy.Guid.ToString(), ["category"] = proxy.Desc.Category,
-                    ["subcategory"] = proxy.Desc.SubCategory, ["is_component"] = component != null,
+                    ["subcategory"] = proxy.Desc.SubCategory, ["description"] = proxy.Desc.Description, ["is_component"] = component != null,
                     ["inputs"] = component == null ? new JArray() : new JArray(component.Params.Input.Select((p, i) =>
                         new JObject { ["index"] = i, ["name"] = p.Name, ["nickname"] = p.NickName,
                             ["type"] = p.TypeName, ["description"] = p.Description, ["access"] = p.Access.ToString(), ["optional"] = p.Optional })),
                     ["outputs"] = new JArray(Ports(obj, true).Select((p, i) =>
                         new JObject { ["index"] = i, ["name"] = p.Name, ["nickname"] = p.NickName })) });
             }
-            return Json(new JObject { ["query"] = query, ["total"] = matches.Count, ["matches"] = items });
+            return Json(new JObject { ["query"] = query, ["resolved_query"] = search, ["total"] = matches.Count, ["matches"] = items });
         }
 
         private static IGH_DocumentObject Instantiate(JObject spec)
@@ -306,7 +322,8 @@ namespace Magpie.MacBridge
             IGH_DocumentObject Resolve(JObject wire, string side)
             {
                 var alias = wire[side + "_alias"]?.ToString();
-                if (alias != null) return aliases.TryGetValue(alias, out var obj) ? obj : throw new InvalidOperationException("Unknown component alias: " + alias);
+                if (alias != null) return aliases.TryGetValue(alias, out var obj) ? obj : throw new InvalidOperationException("Unknown component alias: " + alias
+                    + ". Aliases are local to this create_component_graph call. Use " + side + "_id for an existing instance; aliases in this batch: " + string.Join(", ", aliases.Keys));
                 return Find(doc, wire[side + "_id"]?.ToString());
             }
             var wires = new List<(IGH_Param Source, IGH_Param Target)>();

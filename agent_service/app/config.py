@@ -14,7 +14,6 @@ class Settings:
     openai_api_key: str
     openai_base_url: str | None
     openai_model: str | None
-    model_run_limit: int
 
 
 def load_settings() -> Settings:
@@ -29,7 +28,6 @@ def load_settings() -> Settings:
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         openai_base_url=os.getenv("OPENAI_BASE_URL", "").strip() or None,
         openai_model=os.getenv("OPENAI_MODEL", "").strip() or None,
-        model_run_limit=int(os.getenv("MAGPIE_AGENT_MODEL_RUN_LIMIT", "8")),
     )
 
 

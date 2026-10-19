@@ -4,6 +4,7 @@ Requires a configured Agent service. Also verifies the direct Grasshopper menu.
 """
 import argparse
 import json
+import math
 from pathlib import Path
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ parser.add_argument('--assembly', type=Path, default=Path(__file__).resolve().pa
 parser.add_argument('--rhinocode', default='/Applications/Rhino 8.app/Contents/Resources/bin/rhinocode')
 parser.add_argument('--service', default='http://127.0.0.1:8123')
 parser.add_argument('--report', type=Path, help='Save tool events and actual output for diagnosis')
+parser.add_argument('--scenario', choices=['circle', 'tangent_spheres'], default='circle')
 args = parser.parse_args()
 session = 'circle-smoke-' + uuid.uuid4().hex
 
@@ -75,39 +77,54 @@ entry.PerformClick()
 assert w == t.GetField('_current', BindingFlags.Static | BindingFlags.NonPublic).GetValue(None), 'Menu duplicated the window'
 result = {'document_id': str(Instances.ActiveCanvas.Document.DocumentID)}''')
         print('PASS: Magpie > 打开 Agent opens and reuses the native window', flush=True)
-        payload = {'session_id': session, 'user_input': '画一个随机的圆，直接在当前 Grasshopper 画布完成。',
-                   'document_id': document['document_id'],
-                   'canvas_context': {**document, 'name': 'Circle integration test', 'component_count': 0}}
-        request = urllib.request.Request(args.service + '/graph/invoke/stream', data=json.dumps(payload).encode(),
-                                         headers={'Content-Type': 'application/json'})
+        prompts = ['画一个随机的圆，直接在当前 Grasshopper 画布完成。'] if args.scenario == 'circle' else ['帮我画一个球', '帮我画两个相切的球体']
         events = []
-        with urllib.request.urlopen(request, timeout=240) as response:
-            for line in response:
-                if not line.startswith(b'data: '): continue
-                event = json.loads(line[6:])
-                assert event['type'] != 'error', event
-                if event['type'] != 'agent_event': continue
-                value = event['payload']
-                events.append(value)
-                if value['type'] in ('tool_call', 'tool_result', 'final'):
-                    print(value['type'], value.get('tool'), value.get('status'),
-                          value.get('text', '')[:400] if value['type'] == 'final' or value.get('status') == 'failed' else '', flush=True)
-        assert any(e['type'] == 'final' and e['status'] == 'completed' for e in events), events
-        assert any(e['tool'] == 'create_component_graph' and e['type'] == 'tool_result' and e['status'] == 'completed'
-                   for e in events), 'Model did not create geometry'
+        for prompt in prompts:
+            count = run("result = sc.sticky['magpie_circle_document'].ObjectCount")
+            payload = {'session_id': session, 'user_input': prompt, 'document_id': document['document_id'],
+                       'canvas_context': {**document, 'name': 'Geometry integration test', 'component_count': count}}
+            request = urllib.request.Request(args.service + '/graph/invoke/stream', data=json.dumps(payload).encode(),
+                                             headers={'Content-Type': 'application/json'})
+            turn = []
+            print('REQUEST: ' + prompt, flush=True)
+            with urllib.request.urlopen(request, timeout=240) as response:
+                for line in response:
+                    if not line.startswith(b'data: '): continue
+                    event = json.loads(line[6:])
+                    assert event['type'] != 'error', event
+                    if event['type'] != 'agent_event': continue
+                    value = event['payload']
+                    events.append(value)
+                    turn.append(value)
+                    if value['type'] in ('tool_call', 'tool_result', 'final'):
+                        print(value['type'], value.get('tool'), value.get('status'),
+                              value.get('text', '')[:400] if value['type'] == 'final' or value.get('status') == 'failed' else '', flush=True)
+            if args.report:
+                args.report.write_text(json.dumps({'events': events}, ensure_ascii=False, indent=2))
+            assert any(e['type'] == 'final' and e['status'] == 'completed' for e in turn), [e['text'] for e in turn if e['type'] == 'final']
+            assert any(e['tool'] == 'create_component_graph' and e['type'] == 'tool_result' and e['status'] == 'completed'
+                       for e in turn), 'Model did not create geometry'
         geometry = run('''import Rhino
 from Grasshopper import Instances
 from Grasshopper.Kernel import IGH_Component, GH_RuntimeMessageLevel
 doc = sc.sticky['magpie_circle_document']
 assert Instances.ActiveCanvas.Document == doc
-doc.NewSolution(False)
-circles, errors = [], []
+circles, spheres, errors, outputs = [], [], [], []
 for obj in doc.Objects:
     if not isinstance(obj, IGH_Component): continue
     errors.extend(str(e) for e in obj.RuntimeMessages(GH_RuntimeMessageLevel.Error))
     for port in obj.Params.Output:
+        outputs.append({'component': obj.Name, 'port': port.Name, 'count': port.VolatileDataCount})
         for goo in port.VolatileData.AllData(True):
             value = goo.ScriptVariable()
+            outputs[-1].setdefault('types', []).append(str(type(value)))
+            surface = value if isinstance(value, Rhino.Geometry.Surface) else value.Surfaces[0] if isinstance(value, Rhino.Geometry.Brep) and value.Surfaces.Count == 1 else None
+            if surface is not None:
+                ok, sphere = surface.TryGetSphere()
+                # Validate the actual output Brep/Surface. Rhino's fitted Sphere
+                # may have unset plane axes despite successful TryGetSphere.
+                if ok and goo.IsValid and value.IsValid and sphere.Radius > 0:
+                    spheres.append({'radius': sphere.Radius, 'center': [sphere.Center.X, sphere.Center.Y, sphere.Center.Z], 'component': obj.Name})
             if isinstance(value, Rhino.Geometry.Circle):
                 circle = value
             elif isinstance(value, Rhino.Geometry.Curve):
@@ -117,12 +134,17 @@ for obj in doc.Objects:
             if circle.IsValid and circle.Radius > 0:
                 circles.append({'radius': circle.Radius, 'center': [circle.Center.X, circle.Center.Y, circle.Center.Z],
                                 'component': obj.Name})
-result = {'circles': circles, 'errors': errors, 'objects': doc.ObjectCount}
-assert circles, 'No valid Circle output: ' + str(result)
+result = {'circles': circles, 'spheres': spheres, 'errors': errors, 'objects': doc.ObjectCount, 'outputs': outputs}
 assert not errors, result''')
         if args.report:
             args.report.write_text(json.dumps({'events': events, 'geometry': geometry}, ensure_ascii=False, indent=2))
-        assert len(geometry['circles']) == 1, 'Expected exactly one circle: ' + str(geometry)
+        if args.scenario == 'circle':
+            assert len(geometry['circles']) == 1, 'Expected exactly one circle: ' + str(geometry)
+        else:
+            assert len(geometry['spheres']) == 2, 'Expected exactly two spheres: ' + str(geometry)
+            a, b = geometry['spheres']
+            distance = math.sqrt(sum((x - y) ** 2 for x, y in zip(a['center'], b['center'])))
+            assert math.isclose(distance, a['radius'] + b['radius'], rel_tol=1e-8, abs_tol=1e-8), geometry
         print('PASS: actual Grasshopper output = ' + json.dumps(geometry), flush=True)
     finally:
         run('''from Grasshopper import Instances

@@ -47,7 +47,9 @@ Bridge 只监听 `127.0.0.1`。端口被占用时加载失败，日志位于 `~/
 未指定范围时，新滑块自动扩大默认范围以容纳初始值；显式范围之外的值仍会被拒绝。
 组件优先按准确名称查找，其次是昵称；同名的构造组件优先于几何参数。
 使用 `search_component_catalog` 查询真实 `component_guid`、端口类型、说明与编号，避免猜测 GUID。
-组件查询和上下文返回输出 `data_count` 及最多 5 条预览，圆预览包含有效性、半径和圆心，便于验证实际生成结果。
+支持 `{"queries":["Sphere","Construct Point","Number Slider"],"max_results":5}` 批量查询，每次最多 8 个名称；单个 `query` 也可继续使用。
+名称按单词边界匹配，避免将 Construct 匹配为 Deconstruct；Construct Vector 会解析为实际安装的 Vector XYZ。
+组件查询和上下文返回输出 `data_count` 及最多 5 条预览，圆和球预览包含有效性、半径和中心，便于验证实际生成结果及相切关系。
 批量创建的连接使用 `from_alias` / `to_alias` 或现有组件的 `from_id`；
 目标必须是本批新建组件。向现有目标连线请单独调用 `connect_components`，以保留撤销行为。
 创建操作先验证所有组件和连线，失败时回滚本批已添加对象。
@@ -81,6 +83,8 @@ python3 MacBridge/tests/run_smoke.py --rhino rhinocode_remotepipe_实际PID
 回复支持 Markdown 标题、列表、代码块和表格，并可一键复制。文字与工具调用按执行阶段排列，
 同名工具通过调用 ID 对应结果；工具详情默认折叠，失败时自动展开。阅读较早消息时不会强制滚动到底部。
 执行中断时会保留任务上下文并显示最后的工具错误，不会重新发起没有工具的普通对话来替代执行结果。
+执行异常会返回 `failed` 和中文未完成提示；界面将进行中的步骤标记为已中断，保留已经完成的工具结果。
+不设置模型调用轮数或图执行步数预算，任务持续到完成、执行错误或用户点击停止。
 
 ### 引用画布
 
@@ -128,6 +132,9 @@ python3 MacBridge/tests/ui_smoke.py --rhino rhinocode_remotepipe_实际PID
 
 # 真实模型执行“画一个随机的圆”，验证菜单入口和恰好一个有效圆输出
 python3 MacBridge/tests/agent_circle_smoke.py --rhino rhinocode_remotepipe_实际PID
+
+# 复现两轮对话：先画一个球，再画两个相切球；检查最终球数量和中心距离 = 半径之和
+python3 MacBridge/tests/agent_circle_smoke.py --rhino rhinocode_remotepipe_实际PID --scenario tangent_spheres
 ```
 
 原生测试使用独立临时配置目录，不修改当前模型密钥；窗口测试切换临时画布，并在结束时恢复原画布、删除测试会话。

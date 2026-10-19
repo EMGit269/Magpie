@@ -136,6 +136,17 @@ result = True''')
         assert [t['id'] for t in replay['tools']] == ['a', 'b'], replay
         assert 'first' in replay['tools'][0]['text'] and 'second' in replay['tools'][1]['text'], replay
         assert all(not t['open'] for t in replay['tools']) and replay['rich'] and not replay['unsafe'] and not replay['streaming'], replay
+        # A failed final must not mark the pending plan or tool as completed.
+        javascript('appendAgentEvent({type:"plan",status:"running",text:"准备执行"});'
+                   'appendAgentEvent({type:"tool_call",tool:"search_component_catalog",status:"running",data:{call_id:"limit"}});'
+                   'appendAgentEvent({type:"final",status:"failed",text:"本次任务尚未完成：已达到本轮执行次数上限。"})')
+        stopped = snapshot('({plan:messages.querySelector(".plan .agent-event-status").textContent,'
+                           'tool:messages.querySelector("[data-call-id=limit] .agent-event-status").textContent,'
+                           'completed:[...messages.querySelectorAll(".tool_result .agent-event-status")].map(n=>n.textContent)})')
+        assert stopped['plan'] == stopped['tool'] == '已中断', stopped
+        assert stopped['completed'] == ['已完成', '已完成'], stopped
+        assert snapshot('(() => { state.sending=true; state.acked=true; resetWatchdog();'
+                        'const unlimited=state.watchdog===null && state.sending; setSending(false); return unlimited; })()')
         assert snapshot('!!state.canvas?.matches && !document.getElementById("canvas-reference").hidden')
         # Long multilingual payloads must traverse all URI chunks without breaking the channel.
         javascript('post("theme_changed",{mode:"dark",extra:"中文😀".repeat(12000)})')

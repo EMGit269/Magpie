@@ -77,9 +77,10 @@ namespace Magpie.HostBridge
             if (_componentCatalog != null)
             {
                 tools.OfType<JObject>().First(t => t["name"]?.ToString() == "create_component_graph")["description"] +=
+                    " On macOS: put related new components and wires in ONE batch. from_alias/to_alias refer ONLY to components in THIS call, never aliases from earlier calls. For an existing source use from_id with its instance GUID/public ID. Graph wires must target a new component; use connect_components for existing targets. " +
                     " On macOS: Number Slider supports numeric min/max and integer decimals inside each component spec. Its string value must be a single number, e.g. \"15\", not an interval like \"5..30\". Without explicit bounds the initial range expands to include the value. Geometry components do not accept value; connect a Number Slider to the correct input port from search_component_catalog. Exact primary component names take precedence over nicknames. Example: {\"components\":[{\"name\":\"Number Slider\",\"alias\":\"r\",\"value\":\"15\",\"min\":5,\"max\":30,\"x\":100,\"y\":100},{\"name\":\"Circle\",\"alias\":\"c\",\"x\":320,\"y\":100}],\"connections\":[{\"from_alias\":\"r\",\"to_alias\":\"c\",\"to_index\":1}]}";
                 tools.Add(BuildHostToolDescriptor("search_component_catalog", true,
-                    "Search installed component TYPES before creating geometry. Returns real component_guid, category, and port indices. Use these GUIDs; never guess them. Example arguments: {\"query\":\"Circle\",\"max_results\":10}. Canvas query_components only searches placed instances."));
+                    "Search installed component TYPES before creating geometry. Returns descriptions, real component_guid, category, and port indices/types. Batch related names in one call with queries, e.g. {\"queries\":[\"Sphere\",\"Construct Point\",\"Number Slider\"],\"max_results\":5}; each query has its own result. Single query remains supported. Reuse returned GUIDs and build the graph; do not repeatedly search alternatives. Canvas query_components only searches placed instances."));
             }
             return _availableTools == null ? tools : new JArray(tools.OfType<JObject>().Where(t => _availableTools.Contains(t["name"].ToString())));
         }
@@ -129,7 +130,8 @@ namespace Magpie.HostBridge
                     break;
 
                 case "search_component_catalog":
-                    spec.InputSchema = new JArray { Field("query", "string", true, "Component name or nickname to search."),
+                    spec.InputSchema = new JArray { Field("query", "string", false, "Single name to search; supply query OR queries."),
+                        Field("queries", "array", false, "1-8 component name strings, searched together. Supply query OR queries."),
                         Field("max_results", "integer", false, "Maximum matches, 1-20 (default 10).") };
                     break;
                 case "get_component_context":
@@ -199,6 +201,14 @@ namespace Magpie.HostBridge
             {
                 case "search_component_catalog":
                     if (_componentCatalog == null) throw new NotSupportedException("Component catalog is unavailable on this host.");
+                    if (args["queries"] != null)
+                    {
+                        if (args["query"] != null || !(args["queries"] is JArray queries) || queries.Count < 1 || queries.Count > 8
+                            || queries.Any(q => q.Type != JTokenType.String || string.IsNullOrWhiteSpace(q.ToString())))
+                            throw new InvalidOperationException("Supply either query or queries (1-8 nonempty name strings).");
+                        return new JObject { ["results"] = new JArray(queries.Select(q => JToken.Parse(
+                            _componentCatalog(q.ToString(), args["max_results"]?.Value<int?>() ?? 10)))) }.ToString();
+                    }
                     return _componentCatalog(args["query"]?.ToString(), args["max_results"]?.Value<int?>() ?? 10);
                 case "get_canvas_summary":
                     return _documentQueryService.GetCanvasSummary();

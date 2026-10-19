@@ -4,7 +4,7 @@ import json
 from typing import Any, AsyncIterator, TypedDict
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelCallLimitMiddleware, dynamic_prompt
+from langchain.agents.middleware import dynamic_prompt
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
@@ -74,13 +74,7 @@ class LangChainRuntimeService:
             agent = create_agent(
                 model=self._build_model(),
                 tools=tools,
-                middleware=[
-                    prompt_middleware,
-                    ModelCallLimitMiddleware(
-                        run_limit=self._settings.model_run_limit,
-                        exit_behavior="end",
-                    ),
-                ],
+                middleware=[prompt_middleware],
                 context_schema=AgentRuntimeContext,
             )
 
@@ -92,7 +86,7 @@ class LangChainRuntimeService:
             result = await agent.ainvoke(
                 {"messages": history_messages},
                 context={"session_id": request.session_id, "canvas_context": request.canvas_context},
-                config={"recursion_limit": max(40, self._settings.model_run_limit * 6 + 12)},
+                config={"recursion_limit": float("inf")},
             )
 
             output_text = self._extract_output_text(result)
@@ -164,13 +158,7 @@ class LangChainRuntimeService:
             agent = create_agent(
                 model=self._build_model(),
                 tools=tools,
-                middleware=[
-                    prompt_middleware,
-                    ModelCallLimitMiddleware(
-                        run_limit=self._settings.model_run_limit,
-                        exit_behavior="end",
-                    ),
-                ],
+                middleware=[prompt_middleware],
                 context_schema=AgentRuntimeContext,
             )
 
@@ -183,7 +171,7 @@ class LangChainRuntimeService:
             ]
             async for event in agent.astream_events(
                 {"messages": history_messages},
-                config={"recursion_limit": max(40, self._settings.model_run_limit * 6 + 12)},
+                config={"recursion_limit": float("inf")},
                 context={"session_id": request.session_id, "canvas_context": request.canvas_context},
                 version="v2",
             ):
@@ -302,6 +290,8 @@ class LangChainRuntimeService:
                 "For requests to draw or build, actually create geometry through tools. Choose reasonable defaults when unspecified.",
                 "For a one-off random shape, choose concrete arbitrary parameters and create exactly the requested number of shapes. Build random-generator networks only when the user asks for a parametric random definition or seed control.",
                 "Before creating components, use search_component_catalog if available to obtain actual GUIDs and input port indices. Never guess GUIDs.",
+                "Plan the minimal graph first. Batch related catalog lookups with queries when supported, reuse returned GUIDs/ports, and proceed to construction once the necessary types are known. Avoid repeating successful lookups or searching alternative implementations of a graph you can already build.",
+                "When continuing an existing definition, inspect and reuse its components. To place a sphere, connect a Construct Point to Sphere Base (Grasshopper converts the point to a plane); additional plane/vector/move components are unnecessary. For external tangency, keep the first center fixed and offset the second by the sum of radii. Drive dependent dimensions with arithmetic connections; verify from actual sphere output previews.",
                 "Number Slider values are numeric strings; specify min/max in the component spec for intended ranges. Connect sliders to geometry input ports; do not set geometry with set_component_value.",
                 "After creating geometry, recompute and inspect output data_count and preview via get_component_context, as well as errors, before claiming success. Check the requested geometry count and dimensions; absence of errors alone is insufficient. Do not repeat identical failed calls.",
                 "",
