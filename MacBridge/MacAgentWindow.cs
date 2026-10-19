@@ -259,7 +259,9 @@ namespace Magpie.MacBridge
         {
             using (var ct = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token))
             {
-                _sendCancellation = ct; ct.CancelAfter(TimeSpan.FromMinutes(3));
+                // Generation runs until completion, user stop, or window close.
+                // A fixed wall-clock deadline also interrupts productive long tasks.
+                _sendCancellation = ct;
                 Post("generation_state", new JObject { ["isGenerating"] = true, ["status"] = "Working…" });
                 try { await _service.Stream(_session, text, evt => Post("agent_event", evt), ct.Token, canvas?["id"]?.ToString() ?? "unbound", canvas).ConfigureAwait(false); }
                 catch (OperationCanceledException) { Post("system_message", new JObject { ["text"] = "Generation stopped." }); }
