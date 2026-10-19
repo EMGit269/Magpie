@@ -19,7 +19,7 @@ namespace Magpie.MacBridge
         public override GH_LoadingInstruction PriorityLoad()
         {
             Bridge.Start();
-            Rhino.RhinoApp.Closing += (_, __) => Bridge.Stop();
+            Rhino.RhinoApp.Closing += (_, __) => { Bridge.Stop(); MacAgentService.StopOwnedProcess(); };
             return GH_LoadingInstruction.Proceed;
         }
     }
@@ -69,7 +69,15 @@ namespace Magpie.MacBridge
                 // Await the completion instead of assuming InvokeOnUiThread ran synchronously.
                 Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
                 {
-                    try { completion.TrySetResult(executor.ExecuteRequest(request)); }
+                    try
+                    {
+                        var bound = request?["document_id"]?.ToString();
+                        var active = Grasshopper.Instances.ActiveCanvas?.Document;
+                        if (bound != null && (active == null || active.DocumentID.ToString() != bound))
+                            completion.TrySetResult(new JObject { ["request_id"] = request?["request_id"], ["tool"] = request?["tool"],
+                                ["status"] = "error", ["error"] = "Canvas binding mismatch. Return to the referenced canvas or reference the current canvas in a new conversation." });
+                        else completion.TrySetResult(executor.ExecuteRequest(request));
+                    }
                     catch (Exception error) { completion.TrySetException(error); }
                 }));
             }

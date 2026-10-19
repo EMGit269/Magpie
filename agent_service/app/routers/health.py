@@ -30,6 +30,7 @@ async def health(request: Request, container: ServiceContainer = Depends(get_con
         data={
             "status": "ok",
             "runtime": "langgraph",
+            "canvas_binding_supported": True,
             "graph_configured": bool(api_key and model_name),
             "host_bridge": host,
             "host_bridge_available": host.get("available", True) if isinstance(host, dict) else True,

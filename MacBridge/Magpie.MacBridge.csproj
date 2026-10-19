@@ -10,6 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="RhinoCommon" HintPath="$(RhinoResources)/RhinoCommon.dll" Private="false" />
+    <Reference Include="Rhino.UI" HintPath="$(RhinoResources)/Rhino.UI.dll" Private="false" />
+    <Reference Include="Eto" HintPath="$(RhinoResources)/Eto.dll" Private="false" />
     <Reference Include="Grasshopper" HintPath="$(GrasshopperResources)/Grasshopper.dll" Private="false" />
     <Reference Include="GH_IO" HintPath="$(GrasshopperResources)/GH_IO.dll" Private="false" />
     <Reference Include="System.Drawing.Common" HintPath="$(RhinoResources)/System.Drawing.Common.dll" Private="false" />
@@ -17,6 +19,9 @@
     <Compile Include="*.cs" />
     <Compile Include="../HostBridge/*.cs" Link="HostBridge/%(Filename)%(Extension)" />
     <Compile Include="../Host/GrasshopperDocumentHost.cs" Link="Host/GrasshopperDocumentHost.cs" />
+    <EmbeddedResource Include="../AgentRuntime/Web/magpie-shell.html" LogicalName="Magpie.ChatShell.html" />
+    <EmbeddedResource Include="../AgentRuntime/Web/vendor/*.js" LogicalName="Magpie.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="mac-webview.js" LogicalName="Magpie.MacTransport.js" />
   </ItemGroup>
   <Target Name="CheckRhinoSdk" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(RhinoResources)/RhinoCommon.dll')" Text="Rhino 8 for Mac is required. Override RhinoResources for a custom installation." />

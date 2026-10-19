@@ -747,6 +747,60 @@
       border-top: 1px solid var(--line);
     }
 
+
+    :root { --bg:#fafaf9; --panel:#fff; --panel-soft:#f0f0ee; --line:#e4e4e1;
+      --text:#242622; --muted:#70756d; --faint:#90958b; --accent:#304b3e; --accent-text:#fff;
+      --shadow:0 4px 24px rgba(25,35,25,.06);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; }
+    :root[data-theme="dark"] { --bg:#191c1a; --panel:#202420; --panel-soft:#292e29; --line:#363d36;
+      --text:#e5eae3; --muted:#adb7a8; --faint:#86917f; --accent:#b6d1ba; --accent-text:#1b2b20; }
+    .header { background:var(--bg); }
+    .brand { letter-spacing:.04em; }
+    .messages { gap:22px; padding:26px 22px 210px; scroll-behavior:auto; }
+    .bubble { font-size:14px; line-height:1.75; }
+    .bubble.user { max-width:90%; border-radius:16px 16px 4px 16px; background:var(--panel-soft); color:var(--text); padding:11px 15px; }
+    .bubble.assistant { width:100%; max-width:100%; white-space:normal; }
+    .answer-label { font-size:10px; font-weight:700; letter-spacing:.12em; color:var(--muted); margin-bottom:9px; }
+    .answer-content > :first-child { margin-top:0; } .answer-content > :last-child { margin-bottom:0; }
+    .answer-content p { margin:0 0 12px; }
+    .answer-content h1,.answer-content h2,.answer-content h3 { font-size:17px; line-height:1.45; margin:20px 0 9px; }
+    .answer-content h1 { font-size:20px; } .answer-content h4,.answer-content h5,.answer-content h6 { font-size:14px; margin:15px 0 8px; }
+    .answer-content ul,.answer-content ol { padding-left:24px; margin:10px 0 14px; }
+    .answer-content li { margin:5px 0; } .answer-content li p { margin:4px 0; }
+    .answer-content code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; background:var(--panel-soft); border-radius:4px; padding:2px 5px; }
+    .answer-content pre { overflow-x:auto; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--panel-soft); line-height:1.6; }
+    .answer-content pre code { padding:0; background:none; white-space:pre; }
+    .answer-content table { display:block; overflow-x:auto; border-collapse:collapse; margin:14px 0; font-size:12px; }
+    .answer-content th,.answer-content td { border:1px solid var(--line); padding:7px 10px; min-width:70px; }
+    .answer-content th { background:var(--panel-soft); text-align:left; }
+    .answer-content blockquote { border-left:3px solid var(--line); padding:0 12px; margin:12px 0; color:var(--muted); }
+    .answer-content a { color:var(--accent); text-decoration:underline; } .answer-content hr { border:0; border-top:1px solid var(--line); margin:18px 0; }
+    .copy-answer { margin-top:10px; border:0; background:none; color:var(--muted); padding:3px 0; font-size:11px; }
+    .copy-answer:hover { color:var(--text); } .streaming .copy-answer { visibility:hidden; }
+    .bubble.assistant.streaming { padding-left:0; border-left:0; }
+    .streaming .answer-label::after { content:' · 生成中'; font-weight:400; letter-spacing:0; }
+    .agent-block { width:100%; gap:0; border-left:1px solid var(--line); padding-left:12px; margin:0 0 0 4px; }
+    .agent-event { border-radius:6px; padding:5px 0; font-size:12px; }
+    .agent-event-head { cursor:pointer; list-style:none; min-height:24px; }
+    .agent-event-head::-webkit-details-marker { display:none; }
+    .agent-event-head::before { content:'›'; width:12px; flex:none; color:var(--faint); }
+    .agent-event[open] .agent-event-head::before { content:'⌄'; }
+    .agent-event-status { margin-left:auto; font-size:11px; }
+    .agent-event.failed .agent-event-status { color:var(--error); }
+    .agent-event-text { margin:8px 0; max-height:280px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--panel-soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; line-height:1.6; }
+    .composer { bottom:12px; } .composer-shell { padding:12px; border-radius:16px; background:var(--panel); gap:10px; }
+    :root[data-theme="dark"] .composer-shell { background:var(--panel); }
+    textarea { min-height:68px; }
+    .canvas-reference { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding-bottom:9px; }
+    .canvas-reference[hidden] { display:none; }
+    .canvas-info { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:11px; }
+    .canvas-reference.mismatch .canvas-info { color:var(--error); }
+    #reference-canvas { white-space:nowrap; padding:5px 8px; border:1px solid var(--line); border-radius:7px; background:var(--panel-soft); color:var(--text); font-size:11px; }
+    .send::before { width:10px; height:10px; transform:translateY(-2px) rotate(-45deg); }
+    .send:not(.sending) { background-image:linear-gradient(currentColor,currentColor); background-size:2px 16px; background-position:center; background-repeat:no-repeat; }
+    button:disabled { opacity:.45; cursor:default; }
+    button:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    @media (prefers-reduced-motion:reduce) { * { animation:none !important; transition:none !important; } }
   </style>
 </head>
 <body>
@@ -763,15 +817,19 @@
     <main class="main">
       <section id="messages" class="messages">
         <div id="empty-state" class="empty">
-          <strong>Ask Magpie</strong>
-          <span>Describe a Grasshopper task, inspect the current canvas, or ask for the next modeling step.</span>
+          <strong>从画布开始，和 Magpie 一起建模</strong>
+          <span>描述你想创建的几何，检查现有组件，或引用画布继续修改。</span>
         </div>
       </section>
 
       <section class="composer" aria-label="Message composer">
         <div class="composer-shell">
+          <div id="canvas-reference" class="canvas-reference" hidden>
+            <div id="canvas-info" class="canvas-info" aria-live="polite">未引用画布</div>
+            <button id="reference-canvas" type="button" title="引用当前画布和选中组件；切换画布会开始新对话">⌘ 引用当前画布</button>
+          </div>
           <div id="attachment-tray" class="attachment-tray" aria-live="polite"></div>
-          <textarea id="input" placeholder="Message Magpie..."></textarea>
+          <textarea id="input" placeholder="描述建模任务，或询问当前画布…"></textarea>
           <div class="composer-actions">
             <div class="composer-tools">
               <button id="upload" class="upload" title="Upload files" aria-label="Upload files">+</button>
@@ -891,6 +949,8 @@
 
   </div>
 
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
   <script>
     const state = {
       sending: false,
@@ -908,7 +968,9 @@
       acked: false,
       attachments: [],
       currentAgentBlock: null,
-      currentMessageBubble: null
+      currentMessageBubble: null,
+      canvas: null,
+      followOutput: true
     };
 
     const messages = document.getElementById('messages');
@@ -953,13 +1015,51 @@
       emptyState.style.display = messages.querySelector('.bubble, .agent-block') ? 'none' : 'block';
     }
 
+    messages.addEventListener('scroll', () => {
+      state.followOutput = messages.scrollHeight - messages.clientHeight - messages.scrollTop < 90;
+    }, { passive: true });
+
+    function scrollOutput() {
+      if (state.followOutput) messages.scrollTop = messages.scrollHeight;
+    }
+
+    function renderMarkdown(node, text) {
+      const content = node.querySelector('.answer-content') || node;
+      // Markdown is untrusted model output. Sanitize before inserting any HTML.
+      if (window.marked && window.DOMPurify) {
+        content.innerHTML = DOMPurify.sanitize(marked.parse(text || '', { gfm: true, breaks: true }), {
+          ALLOWED_TAGS: ['p','br','strong','em','del','code','pre','blockquote','ul','ol','li',
+            'h1','h2','h3','h4','h5','h6','hr','table','thead','tbody','tr','th','td','a'],
+          ALLOWED_ATTR: ['href','title','start'], ALLOW_DATA_ATTR: false
+        });
+        content.querySelectorAll('a').forEach(a => { a.removeAttribute('target'); a.setAttribute('rel', 'noreferrer'); });
+      } else content.textContent = text || '';
+      node._rawText = text || '';
+    }
+
+    function assistantBubble(text, streaming = false) {
+      const node = document.createElement('article');
+      node.className = 'bubble assistant' + (streaming ? ' streaming' : '');
+      const label = document.createElement('div'); label.className = 'answer-label'; label.textContent = 'MAGPIE';
+      const content = document.createElement('div'); content.className = 'answer-content';
+      const copy = document.createElement('button'); copy.className = 'copy-answer'; copy.textContent = '复制';
+      copy.title = '复制回复';
+      copy.addEventListener('click', async () => {
+        try {
+          if (window.magpieMac) post('copy_text', { text: node._rawText || '' });
+          else await navigator.clipboard.writeText(node._rawText || '');
+          copy.textContent = '已复制'; setTimeout(() => { copy.textContent = '复制'; }, 1500);
+        } catch (_) { copy.textContent = '复制失败'; }
+      });
+      node.append(label, content, copy); renderMarkdown(node, text);
+      return node;
+    }
+
     function appendBubble(kind, text) {
-      const node = document.createElement('div');
-      node.className = `bubble ${kind}`;
-      node.textContent = text || '';
-      messages.appendChild(node);
-      messages.scrollTop = messages.scrollHeight;
-      updateEmptyState();
+      const node = kind === 'assistant' ? assistantBubble(text) : document.createElement('div');
+      if (kind !== 'assistant') { node.className = `bubble ${kind}`; node.textContent = text || ''; }
+      messages.appendChild(node); scrollOutput(); updateEmptyState();
+      return node;
     }
 
     function formatBytes(size) {
@@ -985,7 +1085,8 @@
       state.attachments.forEach(attachment => {
         const chip = document.createElement('div');
         chip.className = 'attachment-chip';
-        chip.innerHTML = `<span class="attachment-chip-label">${attachmentSummary(attachment)}</span><button class="attachment-chip-remove" type="button" aria-label="Remove attachment">x</button>`;
+        chip.innerHTML = '<span class="attachment-chip-label"></span><button class="attachment-chip-remove" type="button" aria-label="Remove attachment">x</button>';
+        chip.querySelector('.attachment-chip-label').textContent = attachmentSummary(attachment);
         chip.querySelector('.attachment-chip-remove').addEventListener('click', () => {
           state.attachments = state.attachments.filter(item => item.id !== attachment.id);
           renderAttachments();
@@ -1059,31 +1160,21 @@
 
     function appendAgentResponse(payload) {
       const events = Array.isArray(payload.events) ? payload.events : [];
-      if (!events.length && payload.finalText) {
-        appendBubble('assistant', payload.finalText);
-        return;
-      }
-      const block = document.createElement('div');
-      block.className = 'agent-block';
-      events.forEach(event => {
-        block.appendChild(renderEventCard(event));
-      });
-      messages.appendChild(block);
-      messages.scrollTop = messages.scrollHeight;
-      updateEmptyState();
+      events.forEach(appendAgentEvent);
+      if (payload.finalText && !events.some(e => e.type === 'final'))
+        appendAgentEvent({type: 'final', text: payload.finalText});
     }
 
+    const toolLabels = {
+      get_canvas_summary: '读取画布', query_components: '查找组件', get_component_context: '读取组件上下文',
+      check_gh_errors: '检查画布错误', recompute_canvas: '重新计算画布', connect_components: '连接组件',
+      remove_component: '删除组件', set_component_value: '修改组件数值', create_component_graph: '创建组件与连线',
+      list_tasks: '查看任务', add_task: '添加任务', update_task: '更新任务', get_session_context: '读取对话上下文',
+      set_session_fact: '保存对话信息'
+    };
     function formatEventType(type, tool) {
-      switch (type) {
-        case 'plan': return 'Plan';
-        case 'task': return 'Task';
-        case 'tool_call': return tool ? `Tool · ${tool}` : 'Tool';
-        case 'tool_result': return tool ? `Result · ${tool}` : 'Result';
-        case 'warning': return 'Warning';
-        case 'final': return 'Answer';
-        case 'message': return 'Agent';
-        default: return type || 'Agent';
-      }
+      if (tool) return toolLabels[tool] || tool;
+      return {plan:'准备执行',task:'任务',warning:'提示',message:'执行记录',final:'回复'}[type] || '执行记录';
     }
 
     function formatStatusText(status) {
@@ -1105,95 +1196,86 @@
     }
 
     function renderEventCard(event) {
-      const node = document.createElement('div');
       const type = event.type || 'message';
-      const status = event.status || '';
-      node.className = `agent-event ${type} ${status === 'running' ? 'running' : ''}`;
-      const label = formatEventType(type, event.tool || '');
-      const statusText = formatStatusText(status);
-      const text = event.text || '';
-      let html = `<div class="agent-event-head"><span class="agent-event-type">${label}</span>`;
-      if (statusText) {
-        html += `<span class="agent-event-status">${statusText}</span>`;
-      }
-      html += `</div>`;
-      if (text) {
-        html += `<div class="agent-event-text">${text}</div>`;
-      }
-      node.innerHTML = html;
+      const failed = ['failed', 'error'].includes(event.status) || event.data?.status === 'error';
+      const node = document.createElement('details');
+      node.className = `agent-event ${type} ${event.status === 'running' ? 'running' : ''} ${failed ? 'failed' : ''}`;
+      node.dataset.tool = event.tool || ''; node.dataset.callId = event.data?.call_id || '';
+      const head = document.createElement('summary'); head.className = 'agent-event-head';
+      const label = document.createElement('span'); label.className = 'agent-event-type';
+      label.textContent = formatEventType(type, event.tool);
+      const status = document.createElement('span'); status.className = 'agent-event-status';
+      status.textContent = formatStatusText(failed ? 'failed' : event.status);
+      head.append(label, status);
+      const text = document.createElement('pre'); text.className = 'agent-event-text';
+      const data = {...event.data}; delete data.call_id;
+      let body = event.text || '';
+      try { body = JSON.stringify(JSON.parse(body), null, 2); } catch (_) {}
+      text.textContent = [event.tool, body, type === 'tool_call' && Object.keys(data).length ? JSON.stringify(data, null, 2) : ''].filter(Boolean).join('\n\n');
+      node.append(head, text);
+      if (failed) node.open = true;
       return node;
     }
 
     function startAgentBlock() {
-      const block = document.createElement('div');
-      block.className = 'agent-block';
-      messages.appendChild(block);
-      state.currentAgentBlock = block;
-      updateEmptyState();
-      return block;
+      const block = document.createElement('div'); block.className = 'agent-block';
+      messages.appendChild(block); state.currentAgentBlock = block; updateEmptyState(); return block;
+    }
+
+    function finishAssistant() {
+      if (state.currentMessageBubble) {
+        const node = state.currentMessageBubble;
+        if (node._renderFrame) cancelAnimationFrame(node._renderFrame);
+        renderMarkdown(node, node._rawText); node._renderFrame = null;
+        node.classList.remove('streaming'); state.currentMessageBubble = null;
+      }
     }
 
     function appendAssistantDelta(delta) {
+      if (!delta) return;
       if (!state.currentMessageBubble) {
-        const node = document.createElement('div');
-        node.className = 'bubble assistant streaming';
-        messages.appendChild(node);
-        state.currentMessageBubble = node;
-        updateEmptyState();
+        state.currentAgentBlock = null;
+        state.currentMessageBubble = assistantBubble('', true);
+        messages.appendChild(state.currentMessageBubble); updateEmptyState();
       }
-      state.currentMessageBubble.textContent += delta;
-      messages.scrollTop = messages.scrollHeight;
+      const node = state.currentMessageBubble;
+      node._rawText = (node._rawText || '') + delta;
+      if (!node._renderFrame) node._renderFrame = requestAnimationFrame(() => {
+        node._renderFrame = null; renderMarkdown(node, node._rawText); scrollOutput();
+      });
     }
 
     function appendAgentEvent(event) {
       if (!event || !event.type) return;
-      if (event.type === 'assistant_delta') {
-        appendAssistantDelta(event.text || '');
-        resetWatchdog();
-        return;
-      }
+      resetWatchdog();
+      if (event.type === 'assistant_delta') { appendAssistantDelta(event.text || ''); return; }
       if (event.type === 'final') {
         if (state.currentMessageBubble) {
-          if (event.text) state.currentMessageBubble.textContent = event.text;
-          state.currentMessageBubble.classList.remove('streaming');
-        } else if (event.text) {
-          appendBubble('assistant', event.text);
-        }
-        clearRunningStates();
-        state.currentAgentBlock = null;
-        state.currentMessageBubble = null;
-        messages.scrollTop = messages.scrollHeight;
-        resetWatchdog();
-        return;
+          if (event.text) state.currentMessageBubble._rawText = event.text;
+          finishAssistant();
+        } else if (event.text) appendBubble('assistant', event.text);
+        clearRunningStates(); state.currentAgentBlock = null; scrollOutput(); return;
       }
-      let block = state.currentAgentBlock;
-      if (!block) {
-        block = startAgentBlock();
-      }
+      // A tool starts a new stage; subsequent prose must remain after that stage.
+      finishAssistant();
       if (event.type === 'tool_result') {
-        const tool = event.tool || '';
-        const existing = Array.from(block.querySelectorAll('.agent-event.tool_call')).find(node => {
-          const head = node.querySelector('.agent-event-type');
-          return head && head.textContent.includes(tool);
-        });
+        const id = event.data?.call_id;
+        const candidates = [...messages.querySelectorAll('.agent-event.tool_call')];
+        const existing = candidates.find(n => id ? n.dataset.callId === id : n.dataset.tool === event.tool);
         if (existing) {
-          existing.className = `agent-event tool_result ${event.status === 'running' ? 'running' : ''}`;
-          existing.querySelector('.agent-event-type').textContent = formatEventType('tool_result', tool);
-          const statusEl = existing.querySelector('.agent-event-status');
-          statusEl.textContent = formatStatusText(event.status);
-          existing.querySelector('.agent-event-text').textContent = event.text || '';
-          messages.scrollTop = messages.scrollHeight;
-          resetWatchdog();
-          return;
+          const replacement = renderEventCard(event); replacement.open = existing.open || replacement.open;
+          existing.replaceWith(replacement); scrollOutput(); return;
         }
       }
-      block.appendChild(renderEventCard(event));
-      messages.scrollTop = messages.scrollHeight;
-      resetWatchdog();
+      const block = state.currentAgentBlock || startAgentBlock();
+      block.appendChild(renderEventCard(event)); scrollOutput();
     }
 
     function clearRunningStates() {
-      messages.querySelectorAll('.agent-event.running').forEach(node => node.classList.remove('running'));
+      messages.querySelectorAll('.agent-event.running').forEach(node => {
+        node.classList.remove('running');
+        node.querySelector('.agent-event-status').textContent = node.classList.contains('tool_call') ? '已结束' : '已完成';
+      });
     }
 
     function resetWatchdog() {
@@ -1222,6 +1304,7 @@
       messages.querySelectorAll('.agent-block').forEach(node => node.remove());
       input.value = '';
       clearAttachments();
+      state.followOutput = true;
       state.currentAgentBlock = null;
       state.currentMessageBubble = null;
       updateEmptyState();
@@ -1231,12 +1314,16 @@
 
     function setSending(sendingState) {
       state.sending = sendingState;
+      messages.setAttribute('aria-busy', String(sendingState));
+      const reference = document.getElementById('reference-canvas');
+      if (reference) reference.disabled = sendingState;
       send.classList.toggle('sending', sendingState);
       send.title = sendingState ? 'Stop generation' : 'Send message';
       send.setAttribute('aria-label', sendingState ? 'Stop generation' : 'Send message');
       upload.disabled = sendingState;
       toggleHistory.disabled = sendingState;
       settingsBtn.disabled = sendingState;
+      if (!sendingState) finishAssistant();
       if (!sendingState && state.watchdog) {
         clearTimeout(state.watchdog);
         state.watchdog = null;
@@ -1253,6 +1340,9 @@
         return;
       }
       const text = input.value.trim();
+      if (window.magpieMac && state.canvas?.bound && !state.canvas.matches) {
+        appendBubble('error', '画布已切换。请切回引用的画布，或点击「引用当前画布」开始新对话。'); return;
+      }
       const attachmentsToSend = state.attachments.map(attachment => (
         attachment.kind === 'text'
           ? {
@@ -1274,12 +1364,14 @@
       if (!text && !attachmentsToSend.length) return;
       input.value = '';
       clearAttachments();
+      state.followOutput = true;
       state.currentAgentBlock = null;
       state.currentMessageBubble = null;
+      const canvasText = window.magpieMac && state.canvas?.bound ? `[画布 · ${state.canvas.bound.name}]` : '';
       const attachmentText = attachmentsToSend.length
         ? attachmentsToSend.map(item => `[Attachment] ${attachmentSummary(item)}`).join('\n')
         : '';
-      appendBubble('user', [text, attachmentText].filter(Boolean).join('\n'));
+      appendBubble('user', [text, canvasText, attachmentText].filter(Boolean).join('\n'));
       appendBubble('pending', state.serviceReady
         ? (state.hostBridgeReady ? 'Working...' : '通讯中...')
         : 'Checking agent service...');
@@ -1404,6 +1496,7 @@
       messages.querySelectorAll('.agent-block').forEach(node => node.remove());
       input.value = '';
       clearAttachments();
+      state.followOutput = true;
       state.currentAgentBlock = null;
       state.currentMessageBubble = null;
       state.sessionId = payload.sessionId || '';
@@ -1420,7 +1513,7 @@
 
       updateEmptyState();
       setHistoryVisible(false);
-      messages.scrollTop = messages.scrollHeight;
+      scrollOutput();
     }
 
     function providerById(providerId) {
@@ -1533,6 +1626,19 @@
       const message = event.data || {};
       const payload = message.payload || {};
       switch (message.type) {
+        case 'canvas_state': {
+          state.canvas = payload;
+          const row = document.getElementById('canvas-reference'); row.hidden = false;
+          row.classList.toggle('mismatch', !!payload.bound && !payload.matches);
+          const canvas = payload.matches ? payload.active : payload.bound;
+          const info = document.getElementById('canvas-info');
+          info.textContent = canvas ? `${payload.matches ? '◉' : '⚠'} ${canvas.name} · ${canvas.componentCount} 个组件${payload.matches && canvas.selectedCount ? ` · 选中 ${canvas.selectedCount}` : ''}` : '未引用画布 · 仅对话';
+          info.title = payload.bound ? `绑定画布 ${payload.bound.id}${payload.matches ? '' : '；画布已切换，请切回或重新引用'}` : '打开画布后点击引用';
+          break;
+        }
+        case 'canvas_referenced':
+          document.getElementById('input').focus();
+          break;
         case 'init':
           state.serviceUrl = payload.serviceUrl || '';
           state.sessionId = payload.sessionId || '';
@@ -1630,6 +1736,11 @@
       if (state.themeMode === 'system') applyTheme('system');
     });
 
+    document.getElementById('reference-canvas').addEventListener('click', () => post('reference_canvas'));
+    const composer = document.querySelector('.composer');
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      messages.style.paddingBottom = `${composer.offsetHeight + 42}px`; scrollOutput();
+    }).observe(composer);
     updateEmptyState();
     renderAttachments();
     setHistoryVisible(false);

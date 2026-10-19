@@ -10,5 +10,6 @@ fi
 library_dir="${MAGPIE_GH_LIBRARIES:-$HOME/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper (b45a29b1-4343-4035-989e-044e8580d9cf)/Libraries}"
 install -d "$library_dir/Magpie.MacBridge"
 install -m 644 "$bridge_dir/bin/Release/net8.0/Magpie.MacBridge.gha" "$library_dir/Magpie.MacBridge/"
+python3 "$bridge_dir/configure_service.py"
 echo "Installed: $library_dir/Magpie.MacBridge/Magpie.MacBridge.gha"
-echo 'Restart Rhino 8, then open Grasshopper. Bridge: http://127.0.0.1:8765/health'
+echo 'Restart Rhino 8, open Grasshopper, and double-click a Magpie Agent component to chat.'

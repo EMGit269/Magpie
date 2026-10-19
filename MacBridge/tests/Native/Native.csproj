@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework>
+    <RhinoResources>/Applications/Rhino 8.app/Contents/Frameworks/RhCore.framework/Versions/A/Resources</RhinoResources>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json" HintPath="$(RhinoResources)/Newtonsoft.Json.dll" />
+    <Compile Include="../../MacAgentSettings.cs" Link="MacAgentSettings.cs" />
+    <Compile Include="../../MacAgentService.cs" Link="MacAgentService.cs" />
+    <Compile Include="../../BridgeLog.cs" Link="BridgeLog.cs" />
+  </ItemGroup>
+</Project>

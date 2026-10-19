@@ -74,12 +74,12 @@ class ToolRegistryService:
         ]
         return [*local_tools, *host_tools]
 
-    async def build_langchain_tools(self, session_id: str) -> list[StructuredTool]:
+    async def build_langchain_tools(self, session_id: str, document_id: str | None = None) -> list[StructuredTool]:
         host_manifest = await self._host_bridge.manifest()
         self._context_store.set_host_capabilities(session_id, host_manifest.get("tools", []))
         return [
             *self._build_local_tools(session_id),
-            *self._build_host_tools(host_manifest.get("tools", [])),
+            *self._build_host_tools(host_manifest.get("tools", []), document_id),
         ]
 
     def _build_local_tools(self, session_id: str) -> list[StructuredTool]:
@@ -147,7 +147,7 @@ class ToolRegistryService:
             ),
         ]
 
-    def _build_host_tools(self, manifest_tools: list[dict[str, Any]]) -> list[StructuredTool]:
+    def _build_host_tools(self, manifest_tools: list[dict[str, Any]], document_id: str | None = None) -> list[StructuredTool]:
         tools: list[StructuredTool] = []
         for item in manifest_tools:
             tool_name = str(item.get("name", "")).strip()
@@ -164,6 +164,7 @@ class ToolRegistryService:
                     tool=_tool_name,
                     args=arguments,
                     request_id=f"host_{uuid4().hex[:12]}",
+                    **({"document_id": document_id} if document_id else {}),
                 )
                 return json.dumps(response, ensure_ascii=False)
 

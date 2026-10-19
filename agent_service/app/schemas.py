@@ -54,6 +54,8 @@ class AgentInvokeRequest(BaseModel):
     session_id: str = "default"
     user_input: str
     user_goal: str = ""
+    document_id: str | None = None
+    canvas_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentEvent(BaseModel):

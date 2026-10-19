@@ -28,12 +28,14 @@ class HostBridgeClient:
             response.raise_for_status()
             return response.json()
 
-    async def invoke(self, tool: str, args: dict[str, Any], request_id: str) -> dict[str, Any]:
+    async def invoke(self, tool: str, args: dict[str, Any], request_id: str, document_id: str | None = None) -> dict[str, Any]:
         payload = {
             "request_id": request_id,
             "tool": tool,
             "args": args,
         }
+        if document_id is not None:
+            payload["document_id"] = document_id
         async with httpx.AsyncClient(timeout=90.0) as client:
             structured(logger, 20, "host_bridge_invoke_request", tool=tool, request_id=request_id)
             response = await client.post(f"{self._base_url}/tools/invoke", json=payload)
