@@ -32,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="MacBridge\**\*.cs;tests\**\*.cs" />
     <Compile Remove="obj_verify\**\*.cs" />
     <EmbeddedResource Remove="obj_verify\**\*" />
     <None Remove="obj_verify\**\*" />

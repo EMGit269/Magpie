@@ -16,11 +16,15 @@ namespace Magpie.HostBridge
         private CancellationTokenSource _serverCts;
         private Task _serverTask;
         private readonly int _port;
+        private readonly Func<JObject, Task<JObject>> _executeRequest;
 
-        public GrasshopperHostBridgeRuntime(GrasshopperHostToolExecutor executor, int port = 8765)
+        public bool IsRunning => _listener != null && _listener.IsListening;
+
+        public GrasshopperHostBridgeRuntime(GrasshopperHostToolExecutor executor, int port = 8765, Func<JObject, Task<JObject>> executeRequest = null)
         {
             _executor = executor ?? throw new ArgumentNullException(nameof(executor));
             _port = port;
+            _executeRequest = executeRequest ?? (request => Task.FromResult(_executor.ExecuteRequest(request)));
         }
 
         public void EnsureServer()
@@ -36,7 +40,9 @@ namespace Magpie.HostBridge
                     _listener = new HttpListener();
                     _listener.Prefixes.Add("http://127.0.0.1:" + _port + "/");
                     _listener.Start();
-                    _serverTask = Task.Run(() => RunServerLoopAsync(_serverCts.Token));
+                    var listener = _listener;
+                    var token = _serverCts.Token;
+                    _serverTask = Task.Run(() => RunServerLoopAsync(listener, token));
                     AddGhLog.Info("Host bridge server started at http://127.0.0.1:" + _port + "/");
                 }
                 catch (Exception ex)
@@ -65,14 +71,14 @@ namespace Magpie.HostBridge
             }
         }
 
-        private async Task RunServerLoopAsync(CancellationToken ct)
+        private async Task RunServerLoopAsync(HttpListener listener, CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
             {
                 HttpListenerContext context = null;
                 try
                 {
-                    context = await _listener.GetContextAsync().ConfigureAwait(false);
+                    context = await listener.GetContextAsync().ConfigureAwait(false);
                 }
                 catch (HttpListenerException)
                 {
@@ -91,7 +97,8 @@ namespace Magpie.HostBridge
                 if (context == null)
                     continue;
 
-                _ = Task.Run(() => HandleHttpRequestAsync(context), CancellationToken.None);
+                var requestContext = context;
+                _ = Task.Run(() => HandleHttpRequestAsync(requestContext), CancellationToken.None);
             }
         }
 
@@ -134,7 +141,7 @@ namespace Magpie.HostBridge
                     JObject request = string.IsNullOrWhiteSpace(rawBody)
                         ? new JObject()
                         : JObject.Parse(rawBody);
-                    JObject result = _executor.ExecuteRequest(request);
+                    JObject result = await _executeRequest(request).ConfigureAwait(false);
                     await WriteJsonResponseAsync(response, result).ConfigureAwait(false);
                     return;
                 }
@@ -145,6 +152,11 @@ namespace Magpie.HostBridge
                     ["status"] = "error",
                     ["error"] = "Not found."
                 }).ConfigureAwait(false);
+            }
+            catch (Newtonsoft.Json.JsonException ex)
+            {
+                response.StatusCode = 400;
+                await WriteJsonResponseAsync(response, new JObject { ["status"] = "error", ["error"] = ex.Message }).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

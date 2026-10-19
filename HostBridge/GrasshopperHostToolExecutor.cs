@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
@@ -8,11 +9,13 @@ namespace Magpie.HostBridge
     {
         private readonly GrasshopperDocumentQueryService _documentQueryService;
         private readonly GrasshopperCanvasMutationService _canvasMutationService;
+        private readonly HashSet<string> _availableTools;
 
-        public GrasshopperHostToolExecutor(GrasshopperDocumentQueryService documentQueryService, GrasshopperCanvasMutationService canvasMutationService)
+        public GrasshopperHostToolExecutor(GrasshopperDocumentQueryService documentQueryService, GrasshopperCanvasMutationService canvasMutationService, IEnumerable<string> availableTools = null)
         {
             _documentQueryService = documentQueryService ?? throw new ArgumentNullException(nameof(documentQueryService));
             _canvasMutationService = canvasMutationService ?? throw new ArgumentNullException(nameof(canvasMutationService));
+            _availableTools = availableTools == null ? null : new HashSet<string>(availableTools, StringComparer.Ordinal);
         }
 
         public JObject BuildManifestPayload()
@@ -35,6 +38,9 @@ namespace Magpie.HostBridge
             {
                 if (string.IsNullOrWhiteSpace(tool))
                     return BuildError(requestId, tool, "Missing tool name.");
+                tool = tool.Trim();
+                if (_availableTools != null && !_availableTools.Contains(tool))
+                    return BuildError(requestId, tool, "Tool is not available on this host: " + tool);
 
                 if (IsFirstWaveFormalTool(tool))
                     HostBridgeValidation.ValidateFirstWaveToolArgs(tool, args);
@@ -51,7 +57,7 @@ namespace Magpie.HostBridge
 
         private JArray BuildHostToolManifest()
         {
-            return new JArray
+            var tools = new JArray
             {
                 BuildHostToolDescriptor("get_canvas_summary", true, "Return current Grasshopper canvas summary and runtime state."),
                 BuildHostToolDescriptor("query_components", true, "Query focused Grasshopper components by filters."),
@@ -66,6 +72,7 @@ namespace Magpie.HostBridge
                 BuildHostToolDescriptor("create_csharp_script", false, "Create a C# Script component with ports/body/helpers."),
                 BuildHostToolDescriptor("edit_csharp_script", false, "Edit an existing C# Script component body.")
             };
+            return _availableTools == null ? tools : new JArray(tools.OfType<JObject>().Where(t => _availableTools.Contains(t["name"].ToString())));
         }
 
         private JObject BuildHostToolDescriptor(string name, bool readOnly, string description)
@@ -127,6 +134,34 @@ namespace Magpie.HostBridge
                         Field("components", "array", true, "Batch components to create."),
                         Field("connections", "array", false, "Batch connections to create."),
                         Field("group_name", "string", false, "Optional group name.")
+                    };
+                    break;
+
+                case "remove_component":
+                case "read_component_script":
+                    spec.InputSchema = new JArray { Field("id", "string", true, "Target public id or GUID.") };
+                    break;
+                case "connect_components":
+                    spec.InputSchema = new JArray
+                    {
+                        Field("from_id", "string", true, "Source component public id or GUID."),
+                        Field("to_id", "string", true, "Destination component public id or GUID."),
+                        Field("from_index", "integer", false, "Zero-based output port index (default 0)."),
+                        Field("to_index", "integer", false, "Zero-based input port index (default 0)."),
+                        Field("from_port_label", "string", false, "Optional output port name."),
+                        Field("to_port_label", "string", false, "Optional input port name.")
+                    };
+                    break;
+                case "set_component_value":
+                    spec.InputSchema = new JArray
+                    {
+                        Field("id", "string", true, "Target component public id or GUID."),
+                        Field("value", "string", true, "New value; on macOS supports Number Slider, Panel and Boolean Toggle."),
+                        Field("min", "number", false, "Optional slider minimum."),
+                        Field("max", "number", false, "Optional slider maximum."),
+                        Field("decimals", "integer", false, "Optional slider decimal places (0-10)."),
+                        Field("property", "string", false, "Optional property; macOS supports value only."),
+                        Field("graph_mapper_type", "string", false, "Graph Mapper configuration (Windows host only).")
                     };
                     break;
             }

@@ -1,5 +1,7 @@
 # Magpie Handoff
 
+macOS / Rhino 8 已有独立的 Host Bridge 工程，支持 9 个画布工具。安装、联调及实机测试见 [MacBridge/README.md](MacBridge/README.md)。Windows 插件仍使用下述原工程。
+
 `Magpie` 是从原 `ADDGH` 项目中拆出的独立 Grasshopper 插件分支，目标是把原来内嵌在 Rhino / Grasshopper 插件里的 AI 能力，迁移成：
 
 - `Magpie.gha` 作为 Grasshopper 宿主插件
